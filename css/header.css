@@ -1,0 +1,294 @@
+/* Header Top Bar */
+.header {
+    height: var(--header-height);
+    background-color: #0d121f;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 90;
+}
+
+.search-box {
+    position: relative;
+    width: 420px;
+    max-width: 100%;
+}
+
+.search-box input {
+    width: 100%;
+    background-color: #141b2d;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 0.65rem 2.5rem 0.65rem 1rem;
+    color: var(--text-main);
+    font-size: 0.9rem;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.search-box input:focus {
+    border-color: var(--primary-orange);
+    box-shadow: 0 0 12px rgba(255, 159, 26, 0.2);
+}
+
+.search-box .search-icon {
+    position: absolute;
+    right: 0.9rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 1rem;
+}
+
+/* User & Controls */
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.mobile-toggle-btn {
+    display: none;
+    background: #141b2d;
+    border: 1px solid var(--border-color);
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 1.25rem;
+    cursor: pointer;
+}
+
+@media (max-width: 1024px) {
+    .header {
+        padding: 0 0.75rem !important;
+        gap: 0.5rem;
+    }
+    .mobile-toggle-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .search-box {
+        width: 140px !important;
+    }
+    .search-box input {
+        font-size: 0.78rem !important;
+        padding-right: 2rem !important;
+    }
+    .profile-info {
+        display: none !important; /* Hide long name text on phone to save header space */
+    }
+    .notification-dropdown {
+        width: 290px !important;
+        right: -80px !important;
+    }
+}
+
+.notification-btn {
+    position: relative;
+    background: #141b2d;
+    border: 1px solid var(--border-color);
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-main);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.notification-btn:hover {
+    background-color: var(--bg-card-hover);
+    border-color: var(--primary-orange);
+}
+
+.notification-badge-count {
+    position: absolute;
+    top: -5px;
+    left: -5px;
+    background: var(--accent-red);
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 800;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #0d121f;
+}
+
+/* Header Notification Dropdown Overlay */
+.notification-dropdown {
+    display: none;
+    position: absolute;
+    top: 52px;
+    left: 0;
+    width: 360px;
+    background: #0f1524;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.75);
+    z-index: 1000;
+    overflow: hidden;
+    animation: fadeInDown 0.2s ease-out;
+}
+
+.notification-dropdown.open {
+    display: block;
+}
+
+.notification-dropdown-header {
+    padding: 0.85rem 1rem;
+    background: #141b2d;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.notification-dropdown-list {
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.notification-item-row {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    transition: background 0.15s ease;
+}
+
+.notification-item-row:hover {
+    background: rgba(255, 159, 26, 0.05);
+}
+
+.profile-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: #141b2d;
+    border: 1px solid var(--border-color);
+    padding: 0.35rem 0.75rem 0.35rem 0.5rem;
+    border-radius: 12px;
+}
+
+.profile-avatar {
+    width: 36px;
+    height: 36px;
+    background: var(--primary-orange);
+    color: #000;
+    font-weight: 800;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+
+.profile-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.profile-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.profile-role {
+    font-size: 0.7rem;
+    color: var(--primary-orange);
+    font-weight: 600;
+}
+
+/* ─── Profile Dropdown Menu ─────────────────────────────── */
+.profile-wrapper {
+    position: relative;
+}
+
+.profile-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 0;
+    min-width: 220px;
+    background: #141b2d;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px;
+    padding: 1rem;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+    z-index: 9999;
+    animation: dropIn 0.18s ease;
+}
+
+.profile-dropdown.open {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+@keyframes dropIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.profile-dropdown-header {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 700;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.profile-dropdown-user {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(255,159,26,0.08);
+    border: 1px solid rgba(255,159,26,0.2);
+    border-radius: 10px;
+    padding: 0.65rem 0.85rem;
+}
+
+.profile-role-badge {
+    display: inline-block;
+    background: rgba(255,159,26,0.15);
+    color: var(--primary-orange);
+    font-size: 0.7rem;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 5px;
+    margin-top: 0.2rem;
+    border: 1px solid rgba(255,159,26,0.3);
+}
+
+.profile-dropdown-logout {
+    width: 100%;
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.35);
+    color: #ef4444;
+    font-weight: 800;
+    font-size: 0.9rem;
+    padding: 0.6rem;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: 'Tajawal', sans-serif;
+}
+
+.profile-dropdown-logout:hover {
+    background: rgba(239,68,68,0.2);
+    border-color: #ef4444;
+}

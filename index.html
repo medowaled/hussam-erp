@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>حسام ERP v2.5 - نظام تتبع المبيعات والمخزون وحسابات التجار والصلاحيات</title>
+    
+    <!-- Meta SEO & Description -->
+    <meta name="description" content="نظام حسام ERP v2.5 الإحترافي لإدارة وتتبع مبيعات ومخزون السجائر والمعسل وحسابات التجار والديون وكشوف الحسابات.">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/sidebar.css">
+    <link rel="stylesheet" href="css/header.css">
+    <link rel="stylesheet" href="css/pos.css">
+    <link rel="stylesheet" href="css/tables.css">
+    <link rel="stylesheet" href="css/modal.css">
+    <link rel="stylesheet" href="css/print.css">
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="app-sidebar">
+            <button type="button" class="sidebar-close-btn" id="sidebar-close-btn" aria-label="إغلاق القائمة">✕</button>
+            <div class="sidebar-header">
+                <div class="brand-icon-box">
+                    🚬
+                </div>
+                <div>
+                    <div class="brand-title">
+                        حسام <span class="highlight">ERP</span> <span class="brand-version">v2.5</span>
+                    </div>
+                    <div class="brand-sub">نظام إدارة ومبيعات ومخزون السجائر والدخان</div>
+                </div>
+            </div>
+
+            <!-- Navigation Menu Links -->
+            <nav class="sidebar-menu">
+                <a class="nav-item active" data-view="dashboard">
+                    <div class="nav-item-content">
+                        <i>📊</i>
+                        <span>لوحة التحكم والتحليلات</span>
+                    </div>
+                </a>
+
+                <a class="nav-item" data-view="pos">
+                    <div class="nav-item-content">
+                        <i>🛒</i>
+                        <span>نقطة البيع (POS)</span>
+                    </div>
+                    <span class="badge badge-teal">سريع</span>
+                </a>
+
+                <a class="nav-item" data-view="inventory">
+                    <div class="nav-item-content">
+                        <i>📦</i>
+                        <span>المخزون وأسعار اليوم</span>
+                    </div>
+                    <span class="badge badge-red" id="sidebar-stock-alert-pill">تنبيهات</span>
+                </a>
+
+                <a class="nav-item" data-view="customers">
+                    <div class="nav-item-content">
+                        <i>👥</i>
+                        <span>حسابات العملاء والديون</span>
+                    </div>
+                </a>
+
+                <a class="nav-item" data-view="reports">
+                    <div class="nav-item-content">
+                        <i>📈</i>
+                        <span>تقرير إداري وتتبع الأرباح</span>
+                    </div>
+                </a>
+
+                <a class="nav-item" data-view="notifications">
+                    <div class="nav-item-content">
+                        <i>🔔</i>
+                        <span>مركز التنبيهات والإشعارات</span>
+                    </div>
+                </a>
+
+                <a class="nav-item" data-view="settings">
+                    <div class="nav-item-content">
+                        <i>⚙️</i>
+                        <span>الإعدادات</span>
+                    </div>
+                </a>
+            </nav>
+
+            <!-- Sidebar Stock Status Summary Box -->
+            <div class="sidebar-stock-widget">
+                <div class="widget-header">
+                    📄 حالة المخزن الآن
+                </div>
+                <div class="widget-stats">
+                    <div class="widget-stat-box">
+                        <div class="widget-stat-label">الأصناف</div>
+                        <div class="widget-stat-value" id="sidebar-total-items">0</div>
+                    </div>
+                    <div class="widget-stat-box">
+                        <div class="widget-stat-label">القراصص بالمخزن</div>
+                        <div class="widget-stat-value" style="color: var(--accent-teal);" id="sidebar-total-packs">0 قروصة</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Top Header Bar -->
+            <header class="header">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <button class="mobile-toggle-btn" id="mobile-toggle-btn" title="القائمة">☰</button>
+                    <div class="search-box">
+                        <input type="text" id="global-search-input" placeholder="ابحث عن صنف، عميل، أو رقم فاتورة...">
+                        <span class="search-icon">🔍</span>
+                    </div>
+                </div>
+
+                <div class="header-actions">
+                    <!-- Notification Wrapper & Dropdown -->
+                    <div class="notification-wrapper" id="notification-wrapper" style="position: relative;">
+                        <button class="notification-btn" onclick="window.toggleNotificationsDropdown()" title="الإشعارات والتنبيهات">
+                            🔔
+                            <span class="notification-badge-count" id="header-unread-count">0</span>
+                        </button>
+
+                        <div class="notification-dropdown" id="notification-dropdown">
+                            <div class="notification-dropdown-header">
+                                <span style="font-weight: 800; color: #fff; font-size: 0.95rem;">🔔 مركز التنبيهات المباشرة</span>
+                                <button style="background: transparent; border: none; color: var(--primary-orange); font-size: 0.78rem; cursor: pointer; text-decoration: underline;" onclick="window.appRouter('notifications')">عرض الكل ←</button>
+                            </div>
+                            <div class="notification-dropdown-list" id="notification-dropdown-list">
+                                <!-- Populated dynamically by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Profile Dropdown -->
+                    <div class="profile-wrapper" id="profile-wrapper">
+                        <div class="profile-card" id="profile-card-btn" onclick="window.toggleProfileMenu()" style="cursor: pointer; user-select: none;">
+                            <div class="profile-avatar">ح</div>
+                            <div class="profile-info">
+                                <div class="profile-name">حسام حسني</div>
+                                <div class="profile-role">🛡️ مدير عام</div>
+                            </div>
+                        </div>
+
+                        <!-- Dropdown Menu -->
+                        <div class="profile-dropdown" id="profile-dropdown">
+                            <div class="profile-dropdown-header">
+                                حساب المستخدم الحالي:
+                            </div>
+                            <div class="profile-dropdown-user">
+                                <div class="profile-avatar" style="width:38px;height:38px;font-size:1.1rem;">ح</div>
+                                <div>
+                                    <div style="font-weight:800;color:#fff;font-size:0.95rem;">حسام حسني</div>
+                                    <span class="profile-role-badge">مدير عام</span>
+                                </div>
+                            </div>
+                            <button class="profile-dropdown-logout" onclick="window.logoutUser()">
+                                ↪ تسجيل الخروج
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dynamic View Container -->
+            <div class="view-container" id="view-container">
+                <!-- Dynamically populated by JS Router -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Root Container -->
+    <div id="modal-root"></div>
+
+    <!-- Mobile Sidebar Backdrop -->
+    <div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="التنقل السريع">
+        <button type="button" class="mobile-nav-item" data-view="dashboard">
+            <span class="mobile-nav-icon">📊</span>
+            <span class="mobile-nav-label">التحكم</span>
+        </button>
+        <button type="button" class="mobile-nav-item" data-view="pos">
+            <span class="mobile-nav-icon">🛒</span>
+            <span class="mobile-nav-label">البيع</span>
+        </button>
+        <button type="button" class="mobile-nav-item" data-view="inventory">
+            <span class="mobile-nav-icon">📦</span>
+            <span class="mobile-nav-label">المخزون</span>
+        </button>
+        <button type="button" class="mobile-nav-item" data-view="customers">
+            <span class="mobile-nav-icon">👥</span>
+            <span class="mobile-nav-label">العملاء</span>
+        </button>
+        <button type="button" class="mobile-nav-item" id="mobile-nav-more" aria-label="فتح القائمة الكاملة">
+            <span class="mobile-nav-icon">☰</span>
+            <span class="mobile-nav-label">المزيد</span>
+        </button>
+    </nav>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Firebase SDK (compat) - Required for Firestore sync -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+    <!-- Application ES Modules JavaScript -->
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

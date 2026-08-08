@@ -1,0 +1,97 @@
+/* Print Thermal Receipt Layout */
+.invoice-print-area {
+    background: #fff;
+    color: #000;
+    padding: 1.5rem;
+    width: 320px;
+    margin: 0 auto;
+    font-family: 'Tajawal', sans-serif;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.invoice-header-print {
+    text-align: center;
+    border-bottom: 2px dashed #000;
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.invoice-title-print {
+    font-size: 1.4rem;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+}
+
+.invoice-subtitle-print {
+    font-size: 0.8rem;
+    color: #333;
+}
+
+.invoice-meta-print {
+    font-size: 0.8rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 0.5rem;
+}
+
+.print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    margin-bottom: 0.75rem;
+}
+
+.print-table th, .print-table td {
+    padding: 0.35rem 0.2rem;
+    text-align: right;
+}
+
+.print-table th {
+    border-bottom: 1px solid #000;
+}
+
+.print-summary {
+    border-top: 2px dashed #000;
+    padding-top: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.print-summary-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.25rem;
+}
+
+.print-summary-row.total {
+    font-weight: 900;
+    font-size: 1.1rem;
+    border-top: 1px solid #000;
+    padding-top: 0.3rem;
+}
+
+.print-footer {
+    text-align: center;
+    margin-top: 1rem;
+    font-size: 0.75rem;
+    color: #555;
+    border-top: 1px dashed #aaa;
+    padding-top: 0.5rem;
+}
+
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    .invoice-print-area, .invoice-print-area * {
+        visibility: visible;
+    }
+    .invoice-print-area {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        box-shadow: none;
+        padding: 0;
+    }
+}

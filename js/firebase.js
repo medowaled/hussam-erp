@@ -1,0 +1,75 @@
+/**
+ * Hussam ERP — Firebase (Firestore) Connection
+ * ------------------------------------------------------------------
+ * اتبع هذه الخطوات في متصفحك ثم ضع القيم مكان PASTE_...
+ * 1) افتح https://console.firebase.google.com وسجّل الدخول
+ * 2) أنشئ مشروع جديد: Add project → سمّيه (مثال: hussam-erp)
+ * 3) من القائمة الجانبية: Build → Firestore Database → Create database
+ *    (اختر Production mode أو Test mode — كافٍ للتجربة)
+ * 4) من Project settings (أيقونة الترس) → General → Your apps
+ *    → اضغط أيقونة الويب (</>) → سجّل التطبيق باسم (hussam-erp-web)
+ * 5) انسخ كائن firebaseConfig الذي يظهر وانقل قيمه هنا
+ * 6) أعد رفع الموقع على GitHub — وسيعمل كل شيء تلقائياً
+ */
+
+export const firebaseConfig = {
+    apiKey: 'PASTE_YOUR_API_KEY',
+    authDomain: 'PASTE_YOUR_PROJECT_ID.firebaseapp.com',
+    projectId: 'PASTE_YOUR_PROJECT_ID',
+    storageBucket: 'PASTE_YOUR_PROJECT_ID.appspot.com',
+    messagingSenderId: 'PASTE_YOUR_SENDER_ID',
+    appId: 'PASTE_YOUR_APP_ID'
+};
+
+const FIRESTORE_COLLECTION = 'appData';
+
+let db = null;
+
+/**
+ * Returns the Firestore database instance, or null when the SDK is not
+ * loaded / config is not filled yet (the app then falls back to localStorage).
+ */
+export function getFirestoreDB() {
+    if (typeof window === 'undefined' || typeof window.firebase === 'undefined') {
+        return null;
+    }
+    if (!db) {
+        try {
+            const app = window.firebase.initializeApp(firebaseConfig);
+            db = window.firebase.firestore(app);
+        } catch (e) {
+            console.error('Firebase init error (تأكد من ملء firebaseConfig):', e);
+            return null;
+        }
+    }
+    return db;
+}
+
+/** Write one storage key into Firestore (document = key name). */
+export async function pushToFirestore(key, value) {
+    const database = getFirestoreDB();
+    if (!database) return false;
+    try {
+        await database.collection(FIRESTORE_COLLECTION).doc(key).set({
+            data: value,
+            updatedAt: Date.now()
+        });
+        return true;
+    } catch (e) {
+        console.error('Firestore write error:', e);
+        return false;
+    }
+}
+
+/** Read one storage key from Firestore (null when missing or offline). */
+export async function pullFromFirestore(key) {
+    const database = getFirestoreDB();
+    if (!database) return null;
+    try {
+        const doc = await database.collection(FIRESTORE_COLLECTION).doc(key).get();
+        return doc.exists ? doc.data().data : null;
+    } catch (e) {
+        console.error('Firestore read error:', e);
+        return null;
+    }
+}

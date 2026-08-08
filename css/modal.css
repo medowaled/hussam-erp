@@ -1,0 +1,264 @@
+/* Modal Backdrop & Dialog */
+#modal-root {
+    position: relative;
+    z-index: 9999;
+}
+
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(5, 8, 15, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.modal-backdrop.active {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    display: flex !important;
+}
+
+.modal-dialog {
+    background: #101624 !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 20px;
+    width: 580px;
+    max-width: 95%;
+    max-height: 92vh;
+    overflow-y: auto;
+    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.85);
+    position: relative;
+    z-index: 100000;
+    color: #f3f4f6;
+}
+
+.modal-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #0d121f;
+}
+
+.modal-title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.35rem;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.modal-close:hover {
+    color: var(--accent-red);
+}
+
+.modal-body {
+    padding: 1.25rem 1.5rem;
+    background: #101624;
+}
+
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    background: #0d121f;
+    border-bottom-left-radius: 20px;
+    border-bottom-right-radius: 20px;
+}
+
+/* Printable Receipt Card Styling - Screenshot 2 Exact Match */
+.invoice-receipt-card {
+    background: #ffffff;
+    color: #111827;
+    border-radius: 16px;
+    padding: 1.5rem;
+    font-family: 'Tajawal', sans-serif;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    margin-bottom: 1.25rem;
+}
+
+.receipt-header {
+    text-align: center;
+    border-bottom: 1px dashed #d1d5db;
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.receipt-logo-title {
+    font-size: 1.35rem;
+    font-weight: 900;
+    color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+}
+
+.receipt-sub {
+    font-size: 0.8rem;
+    color: #4b5563;
+    font-weight: 600;
+    margin-top: 0.1rem;
+}
+
+.receipt-details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px dashed #d1d5db;
+    padding-bottom: 0.75rem;
+}
+
+.receipt-details-grid div {
+    color: #374151;
+}
+
+.receipt-details-grid strong {
+    color: #000;
+}
+
+.receipt-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    margin-bottom: 0.75rem;
+}
+
+.receipt-table th {
+    color: #6b7280;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 0.4rem 0.2rem;
+    text-align: right;
+    font-weight: 700;
+}
+
+.receipt-table td {
+    padding: 0.4rem 0.2rem;
+    color: #111827;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.receipt-qty-highlight {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 10px;
+    padding: 0.6rem;
+    text-align: center;
+    font-weight: 800;
+    font-size: 0.9rem;
+    color: #92400e;
+    margin-bottom: 0.85rem;
+}
+
+.receipt-totals {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    border-bottom: 1px dashed #d1d5db;
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.receipt-totals-row {
+    display: flex;
+    justify-content: space-between;
+    color: #374151;
+}
+
+.receipt-totals-row.total-bold {
+    font-weight: 900;
+    color: #000;
+    font-size: 0.95rem;
+}
+
+.receipt-totals-row.due-red {
+    font-weight: 900;
+    color: #dc2626;
+    font-size: 0.95rem;
+}
+
+.receipt-footer-msg {
+    text-align: center;
+    font-size: 0.75rem;
+    color: #6b7280;
+    line-height: 1.4;
+}
+
+/* Modal Bottom Action Bar (Whatsapp / PDF / Print) */
+.receipt-action-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 0.5rem;
+}
+
+.btn-whatsapp-green {
+    background: #00c897;
+    color: #000;
+    font-weight: 800;
+    border: none;
+    padding: 0.55rem 0.85rem;
+    border-radius: 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+}
+
+.btn-whatsapp-orange {
+    background: #ff9f1a;
+    color: #000;
+    font-weight: 800;
+    border: none;
+    padding: 0.55rem 0.85rem;
+    border-radius: 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+}
+
+.btn-download-blue {
+    background: #192338;
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    font-weight: 700;
+    padding: 0.55rem 0.85rem;
+    border-radius: 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+}

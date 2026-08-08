@@ -1,0 +1,90 @@
+/* Data Tables */
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.erp-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-top: 0.5rem;
+}
+
+.erp-table th {
+    background-color: #0f1524;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 0.85rem 1rem;
+    text-align: right;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.erp-table th:first-child {
+    border-top-right-radius: 10px;
+}
+
+.erp-table th:last-child {
+    border-top-left-radius: 10px;
+}
+
+.erp-table td {
+    padding: 0.85rem 1rem;
+    background-color: var(--bg-card);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    font-size: 0.9rem;
+    color: var(--text-main);
+}
+
+.erp-table tbody tr:hover td {
+    background-color: var(--bg-card-hover);
+}
+
+.erp-table tbody tr:last-child td:first-child {
+    border-bottom-right-radius: 10px;
+}
+
+.erp-table tbody tr:last-child td:last-child {
+    border-bottom-left-radius: 10px;
+}
+
+.table-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.action-btn {
+    background: #1f2a44;
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+    background: var(--primary-orange);
+    color: #000;
+    border-color: var(--primary-orange);
+}
+
+/* Empty State Table Placeholder */
+.empty-table-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-muted);
+}
+
+.empty-table-state i {
+    font-size: 2.5rem;
+    color: #2a3654;
+    margin-bottom: 0.75rem;
+    display: block;
+}
