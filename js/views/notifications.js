@@ -49,7 +49,7 @@ export function renderNotificationsView() {
                                     <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.4rem;">🕒 ${n.createdAt || ''}</div>
                                 </div>
                             </div>
-                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                                 <button class="action-btn" title="طباعة هذا الإشعار فقط" style="background:#1a233a;color:var(--primary-orange);border:1px solid rgba(255,159,26,0.3);padding:0.45rem 0.75rem;border-radius:8px;font-size:0.82rem;" onclick="window.printSingleNotification('${notifId}')">
                                     🖨️ طباعة هذا الإشعار
                                 </button>

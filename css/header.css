@@ -292,3 +292,18 @@
     background: rgba(239,68,68,0.2);
     border-color: #ef4444;
 }
+
+/* Mobile: keep notification action buttons visible & tappable */
+@media (max-width: 640px) {
+    .notification-item-row {
+        flex-wrap: wrap;
+    }
+    .notification-item-row button {
+        font-size: 1.05rem !important;
+        min-width: 38px;
+        min-height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+}

@@ -897,6 +897,16 @@ export function showInvoiceModal(invoice) {
 }
 window.showInvoiceModal = showInvoiceModal;
 
+/* Open an invoice by its number (used from the customer statement table) */
+window.showInvoiceByNumber = (invoiceNumber) => {
+    const inv = state.invoices.find(i => String(i.invoiceNumber) === String(invoiceNumber));
+    if (inv) {
+        window.showInvoiceModal(inv);
+    } else {
+        alert('لم يتم العثور على هذه الفاتورة!');
+    }
+};
+
 function _renderInvoiceModal(invoice, isConfirmed) {
     setupModals();
     const root = document.getElementById('modal-root');
@@ -1225,11 +1235,12 @@ export function showCustomerStatement(customerId) {
                                             <th style="padding: 0.6rem 0.75rem;">طريقة الدفع</th>
                                             <th style="padding: 0.6rem 0.75rem;">الأصناف</th>
                                             <th style="padding: 0.6rem 0.75rem; text-align: left;">الإجمالي</th>
+                                            <th style="padding: 0.6rem 0.75rem; text-align: center;">عرض</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         ${customerInvoices.map(inv => `
-                                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); color: #fff;">
+                                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); color: #fff; cursor: pointer; transition: background 0.15s ease;" onclick="window.showInvoiceByNumber('${inv.invoiceNumber}')" onmouseover="this.style.background='rgba(255,159,26,0.06)'" onmouseout="this.style.background=''">
                                                 <td style="padding: 0.6rem 0.75rem; font-size: 0.78rem; color: var(--text-muted);">${inv.createdAt}</td>
                                                 <td style="padding: 0.6rem 0.75rem; font-weight: 700; color: var(--primary-orange);">${inv.invoiceNumber}</td>
                                                 <td style="padding: 0.6rem 0.75rem;">
@@ -1243,6 +1254,7 @@ export function showCustomerStatement(customerId) {
                                                 <td style="padding: 0.6rem 0.75rem; font-weight: 800; text-align: left; color: #fff;">
                                                     ${(inv.grandTotal || 0).toLocaleString('ar-EG')} ج
                                                 </td>
+                                                <td style="padding: 0.6rem 0.75rem; text-align: center; font-size: 1rem;" title="اضغط لعرض الفاتورة">👁️</td>
                                             </tr>
                                         `).join('')}
                                     </tbody>
