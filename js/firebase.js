@@ -13,12 +13,13 @@
  */
 
 export const firebaseConfig = {
-    apiKey: 'PASTE_YOUR_API_KEY',
-    authDomain: 'PASTE_YOUR_PROJECT_ID.firebaseapp.com',
-    projectId: 'PASTE_YOUR_PROJECT_ID',
-    storageBucket: 'PASTE_YOUR_PROJECT_ID.appspot.com',
-    messagingSenderId: 'PASTE_YOUR_SENDER_ID',
-    appId: 'PASTE_YOUR_APP_ID'
+    apiKey: 'AIzaSyCsjEZ_Acd9-WZo1xcvkiOdCYB1DYdDByU',
+    authDomain: 'hussam-erp.firebaseapp.com',
+    projectId: 'hussam-erp',
+    storageBucket: 'hussam-erp.firebasestorage.app',
+    messagingSenderId: '548776642415',
+    appId: '1:548776642415:web:35eb43e3146a82cd128a9a',
+    measurementId: 'G-DMZBBRVTS7'
 };
 
 const FIRESTORE_COLLECTION = 'appData';
