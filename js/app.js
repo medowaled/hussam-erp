@@ -427,7 +427,9 @@ window.toggleNotificationsDropdown = () => {
                 </div>
             `;
         } else {
-            listEl.innerHTML = notifications.slice(0, 5).map(n => `
+            listEl.innerHTML = notifications.slice(0, 5).map(n => {
+                const notifId = String(n.id).replace(/'/g, "\\'");
+                return `
                 <div class="notification-item-row flex-between">
                     <div style="display:flex;gap:0.6rem;align-items:flex-start;">
                         <span style="font-size:1.1rem;">${n.type === 'warning' ? '⚠️' : n.type === 'sale' ? '🛒' : 'ℹ️'}</span>
@@ -437,15 +439,30 @@ window.toggleNotificationsDropdown = () => {
                             <div style="font-size:0.7rem;color:var(--primary-orange);margin-top:0.25rem;">${n.createdAt}</div>
                         </div>
                     </div>
-                    <button style="background:transparent;border:none;color:var(--accent-red);cursor:pointer;font-size:0.85rem;" title="حذف" onclick="event.stopPropagation(); state.deleteNotification('${n.id}'); window.toggleNotificationsDropdown();">
+                    <button style="background:transparent;border:none;color:var(--accent-red);cursor:pointer;font-size:0.85rem;" title="حذف" onclick="window.deleteNotificationFromDropdown('${notifId}')">
                         🗑️
                     </button>
                 </div>
-            `).join('');
+            `;}).join('');
         }
     }
 
     dropdown.classList.add('open');
+};
+
+/* Delete one notification from the header dropdown (state is not reachable
+   inside inline onclick handlers in ES modules, so we expose a helper). */
+window.deleteNotificationFromDropdown = (id) => {
+    state.deleteNotification(id);
+    window.toggleNotificationsDropdown();
+};
+
+/* Clear all notifications from the header dropdown */
+window.clearAllNotificationsFromDropdown = () => {
+    if (confirm('هل أنت متأكد من مسح جميع الإشعارات؟')) {
+        state.clearAllNotifications();
+        window.toggleNotificationsDropdown();
+    }
 };
 
 window.logoutUser = () => {

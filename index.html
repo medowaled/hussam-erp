@@ -130,7 +130,10 @@
                         <div class="notification-dropdown" id="notification-dropdown">
                             <div class="notification-dropdown-header">
                                 <span style="font-weight: 800; color: #fff; font-size: 0.95rem;">🔔 مركز التنبيهات المباشرة</span>
-                                <button style="background: transparent; border: none; color: var(--primary-orange); font-size: 0.78rem; cursor: pointer; text-decoration: underline;" onclick="window.appRouter('notifications')">عرض الكل ←</button>
+                                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                    <button style="background: transparent; border: none; color: #ef4444; font-size: 0.78rem; cursor: pointer; text-decoration: underline;" onclick="window.clearAllNotificationsFromDropdown()">🗑️ مسح الكل</button>
+                                    <button style="background: transparent; border: none; color: var(--primary-orange); font-size: 0.78rem; cursor: pointer; text-decoration: underline;" onclick="window.appRouter('notifications')">عرض الكل ←</button>
+                                </div>
                             </div>
                             <div class="notification-dropdown-list" id="notification-dropdown-list">
                                 <!-- Populated dynamically by JS -->
