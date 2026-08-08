@@ -63,15 +63,20 @@ export function renderCustomersView() {
                 <div class="grid-3" id="customers-grid">
                     ${customers.map(c => `
                         <div class="card-dark" style="background: #0f1524; position: relative;">
-                            <div class="flex-between" style="margin-bottom: 0.75rem;">
+                            <div class="flex-between" style="margin-bottom: 0.75rem; gap: 0.5rem;">
                                 <div>
                                     <div style="font-size: 1.15rem; font-weight: 800; color: #fff;">${c.name}</div>
                                     <div style="font-size: 0.8rem; color: var(--primary-orange); font-weight: 600;">${c.shopName || 'محل تجزئة'}</div>
                                 </div>
-                                ${c.debt > 0 ? 
-                                    `<span class="badge badge-red">مدين (عليه ديون)</span>` : 
-                                    `<span class="badge badge-teal">خالي الديون</span>`
-                                }
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    ${c.debt > 0 ? 
+                                        `<span class="badge badge-red">مدين (عليه ديون)</span>` : 
+                                        `<span class="badge badge-teal">خالي الديون</span>`
+                                    }
+                                    <button title="حذف العميل نهائياً" style="background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: var(--accent-red); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; display: inline-flex; align-items: center; justify-content: center;" onclick="window.deleteCustomer(${c.id})">
+                                        🗑️
+                                    </button>
+                                </div>
                             </div>
 
                             <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem; display: flex; flex-direction: column; gap: 0.25rem;">
@@ -117,4 +122,13 @@ window.filterCustomersGrid = (query) => {
         const text = card.innerText.toLowerCase();
         card.style.display = text.includes(query.toLowerCase()) ? '' : 'none';
     });
+};
+
+window.deleteCustomer = (id) => {
+    const customer = state.customers.find(c => c.id === id);
+    if (!customer) return;
+    if (confirm(`هل أنت متأكد من حذف العميل (${customer.name}) نهائياً من النظام؟\nفواتيره السابقة ستبقى محفوظة في السجلات.`)) {
+        state.deleteCustomer(id);
+        window.renderCurrentView();
+    }
 };

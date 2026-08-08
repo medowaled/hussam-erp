@@ -308,6 +308,27 @@ class ERPState {
         }
     }
 
+    deleteCustomer(id) {
+        this.customers = this.customers.filter(c => c.id !== id);
+        this.save(STORAGE_KEYS.CUSTOMERS, this.customers);
+
+        // Remove the customer from any employee assignment lists
+        let usersChanged = false;
+        this.users.forEach(u => {
+            if (Array.isArray(u.assignedCustomers)) {
+                const filtered = u.assignedCustomers.filter(cId => Number(cId) !== Number(id));
+                if (filtered.length !== u.assignedCustomers.length) {
+                    u.assignedCustomers = filtered;
+                    usersChanged = true;
+                }
+            }
+        });
+        if (usersChanged) {
+            this.save(STORAGE_KEYS.USERS, this.users);
+        }
+        return true;
+    }
+
     /* Cart Operations */
     addToCart(productId, qtyPacks = 1) {
         const product = this.products.find(p => p.id === productId);
