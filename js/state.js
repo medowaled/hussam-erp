@@ -116,8 +116,11 @@ class ERPState {
         } catch (e) {
             console.error('LocalStorage save error:', e);
         }
-        // Cloud sync: push every change to Firestore (fire-and-forget)
-        pushToFirestore(key, data);
+        // Cloud sync: business data only. The logged-in session (CURRENT_USER)
+        // stays on this device so opening the site never auto-logs-in.
+        if (key !== STORAGE_KEYS.CURRENT_USER) {
+            pushToFirestore(key, data);
+        }
     }
 
     /**
@@ -147,7 +150,8 @@ class ERPState {
             return;
         }
 
-        const keys = Object.values(STORAGE_KEYS);
+        // CURRENT_USER (login session) is device-local and never synced
+        const keys = Object.values(STORAGE_KEYS).filter(k => k !== STORAGE_KEYS.CURRENT_USER);
         for (const key of keys) {
             const remote = await pullFromFirestore(key);
             if (remote !== null && remote !== undefined) {
@@ -749,7 +753,6 @@ class ERPState {
         this.notify();
 
         // Sync logout state to the cloud so other devices are logged out too
-        pushToFirestore(STORAGE_KEYS.CURRENT_USER, null);
         pushToFirestore(STORAGE_KEYS.CART, []);
     }
 }
