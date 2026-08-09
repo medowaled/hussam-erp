@@ -262,3 +262,26 @@
     gap: 0.35rem;
     font-size: 0.85rem;
 }
+
+@media (max-width: 640px) {
+    .modal-dialog {
+        width: 96% !important;
+        max-width: 96% !important;
+        padding: 0 !important;
+        border-radius: 14px !important;
+    }
+    .modal-header, .modal-body, .modal-footer {
+        padding: 0.85rem 1rem !important;
+    }
+    .receipt-action-buttons {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.4rem !important;
+    }
+    .receipt-action-buttons button {
+        width: 100% !important;
+        justify-content: center !important;
+        font-size: 0.78rem !important;
+        padding: 0.5rem 0.3rem !important;
+    }
+}

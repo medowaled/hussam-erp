@@ -101,6 +101,10 @@ class ERPState {
 
     load(key, defaultValue) {
         try {
+            if (key === STORAGE_KEYS.CURRENT_USER) {
+                const sessionData = sessionStorage.getItem(key);
+                return sessionData ? JSON.parse(sessionData) : defaultValue;
+            }
             const data = localStorage.getItem(key);
             return data ? JSON.parse(data) : defaultValue;
         } catch (e) {
@@ -111,7 +115,16 @@ class ERPState {
 
     save(key, data) {
         try {
-            localStorage.setItem(key, JSON.stringify(data));
+            if (key === STORAGE_KEYS.CURRENT_USER) {
+                if (data) {
+                    sessionStorage.setItem(key, JSON.stringify(data));
+                } else {
+                    sessionStorage.removeItem(key);
+                }
+                localStorage.removeItem(key);
+            } else {
+                localStorage.setItem(key, JSON.stringify(data));
+            }
             this.notify();
         } catch (e) {
             console.error('LocalStorage save error:', e);
@@ -383,6 +396,12 @@ class ERPState {
         const remainingDebt = Math.max(0, grandTotal - paidAmount);
         const netProfit = grandTotal - totalCost;
 
+        // Customer debt metrics before and after invoice
+        const customer = checkoutData.customerId ? this.customers.find(c => c.id == checkoutData.customerId) : null;
+        const previousDebt = customer ? Number(customer.debt) || 0 : 0;
+        const totalDebtBeforePayment = previousDebt + grandTotal;
+        const totalDebtAfterInvoice = previousDebt + remainingDebt;
+
         const invoiceNumber = 'INV-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
 
         const seller = this.currentUser || { id: 1, name: 'حسام حسني' };
@@ -400,6 +419,9 @@ class ERPState {
             netProfit,
             paidAmount,
             remainingDebt,
+            previousDebt,
+            totalDebtBeforePayment,
+            totalDebtAfterInvoice,
             paymentMethod: checkoutData.paymentMethod || 'cash',
             createdAt: new Date().toLocaleString('ar-EG'),
             sellerId: seller.id,
@@ -423,12 +445,22 @@ class ERPState {
             }
         });
         this.save(STORAGE_KEYS.PRODUCTS, this.products);
+
+        // Update seller delegate cash holding if seller is employee/delegate
+        const sellerUser = this.users.find(u => u.id === seller.id);
+        const isDelegate = sellerUser && sellerUser.role !== 'مدير عام' && sellerUser.id !== 1;
+        if (isDelegate) {
+            sellerUser.delegateCashHand = (Number(sellerUser.delegateCashHand) || 0) + paidAmount;
+        } else {
+            // Admin sales go directly to main cash liquidity
+            this.cashOnHand += paidAmount;
+            this.save(STORAGE_KEYS.CASH_ON_HAND, this.cashOnHand);
+        }
         this.save(STORAGE_KEYS.USERS, this.users);
 
         // Update customer debt if applicable
-        if (checkoutData.customerId && remainingDebt > 0) {
-            const customer = this.customers.find(c => c.id == checkoutData.customerId);
-            if (customer) {
+        if (customer) {
+            if (remainingDebt > 0 || paidAmount > 0) {
                 customer.debt += remainingDebt;
                 customer.totalPurchases += grandTotal;
                 this.save(STORAGE_KEYS.CUSTOMERS, this.customers);
@@ -442,16 +474,47 @@ class ERPState {
             type: 'sale'
         });
 
-        // Increment Cash Liquidity by paid amount
-        this.cashOnHand += paidAmount;
-        this.save(STORAGE_KEYS.CASH_ON_HAND, this.cashOnHand);
-
         this.invoices.unshift(newInvoice);
         this.save(STORAGE_KEYS.INVOICES, this.invoices);
         this.clearCart();
         this.checkStockThresholds();
 
         return newInvoice;
+    }
+
+    /* Customer Management Methods */
+    addCustomer(customerData) {
+        const newCustomer = {
+            id: Date.now(),
+            name: customerData.name || '',
+            shopName: customerData.shopName || '',
+            phone: customerData.phone || '',
+            location: customerData.location || '',
+            debt: Number(customerData.debt) || 0,
+            totalPurchases: Number(customerData.totalPurchases) || 0,
+            paidAmount: Number(customerData.paidAmount) || 0
+        };
+        this.customers.push(newCustomer);
+        this.save(STORAGE_KEYS.CUSTOMERS, this.customers);
+        this.notify();
+        return newCustomer;
+    }
+
+    updateCustomer(id, updatedFields) {
+        const index = this.customers.findIndex(c => c.id === id);
+        if (index !== -1) {
+            this.customers[index] = { ...this.customers[index], ...updatedFields };
+            this.save(STORAGE_KEYS.CUSTOMERS, this.customers);
+            this.notify();
+            return this.customers[index];
+        }
+        return null;
+    }
+
+    deleteCustomer(id) {
+        this.customers = this.customers.filter(c => c.id !== id);
+        this.save(STORAGE_KEYS.CUSTOMERS, this.customers);
+        this.notify();
     }
 
     /* Cash Liquidity Management */
@@ -680,7 +743,20 @@ class ERPState {
         return Math.max(0, product.stockPacks - totalAllocatedOtherEmployees);
     }
 
-    assignEmployeeQuota(userId, { assignedCustomers, productQuotas }) {
+    getAvailableCustomersForUser(user = this.currentUser) {
+        if (!user) return this.customers;
+        const isAll = user.role === 'مدير عام' || (user.permissions && user.permissions.includes('all'));
+        if (isAll || !user.assignedCustomers || user.assignedCustomers === 'all') {
+            return this.customers;
+        }
+        if (Array.isArray(user.assignedCustomers)) {
+            const ids = user.assignedCustomers.map(Number);
+            return this.customers.filter(c => ids.includes(Number(c.id)));
+        }
+        return this.customers;
+    }
+
+    assignEmployeeQuota(userId, { assignedCustomers, productQuotas, resetSoldQty = false }) {
         const user = this.users.find(u => u.id === userId);
         if (!user) return { success: false, message: 'الموظف غير موجود!' };
 
@@ -691,9 +767,7 @@ class ERPState {
             if (!product) continue;
 
             const requestedAlloc = Number(newAllocQty) || 0;
-            const existingSold = user.productQuotas && user.productQuotas[productId]
-                ? Number(user.productQuotas[productId].soldQty) || 0
-                : 0;
+            const existingSold = (resetSoldQty ? 0 : (user.productQuotas && user.productQuotas[productId] ? Number(user.productQuotas[productId].soldQty) || 0 : 0));
 
             const netRequestedQuota = Math.max(0, requestedAlloc - existingSold);
             const freeStock = this.getUnallocatedStock(productId, userId);
@@ -714,7 +788,7 @@ class ERPState {
 
         for (const [prodIdStr, newAllocQty] of Object.entries(productQuotas)) {
             const productId = Number(prodIdStr);
-            const existingSold = user.productQuotas[productId] ? (user.productQuotas[productId].soldQty || 0) : 0;
+            const existingSold = resetSoldQty ? 0 : (user.productQuotas[productId] ? (user.productQuotas[productId].soldQty || 0) : 0);
             user.productQuotas[productId] = {
                 allocatedQty: Number(newAllocQty) || 0,
                 soldQty: existingSold
@@ -722,7 +796,34 @@ class ERPState {
         }
 
         this.save(STORAGE_KEYS.USERS, this.users);
+        this.notify();
         return { success: true };
+    }
+
+    /* Admin Cash Collection from Delegate */
+    collectDelegateCash(userId, amount, notes = '') {
+        const user = this.users.find(u => u.id === userId);
+        if (!user) return { success: false, message: 'الموظف غير موجود!' };
+
+        const collectAmount = Number(amount) || 0;
+        if (collectAmount <= 0) return { success: false, message: 'يرجى إدخال مبلغ صحيح للتحصيل!' };
+
+        const currentHand = Number(user.delegateCashHand) || 0;
+
+        user.delegateCashHand = Math.max(0, currentHand - collectAmount);
+        this.cashOnHand += collectAmount;
+
+        this.save(STORAGE_KEYS.USERS, this.users);
+        this.save(STORAGE_KEYS.CASH_ON_HAND, this.cashOnHand);
+
+        this.addNotification({
+            title: `💵 تحصيل نقدية من المندوب (${user.name})`,
+            message: `تم تحصيل مبلغ ${collectAmount.toLocaleString('ar-EG')} ج.م من المندوب وتوريدها للخزينة الرئيسية. ${notes ? 'البيان: ' + notes : ''}`,
+            type: 'info'
+        });
+
+        this.notify();
+        return { success: true, user, newCashOnHand: this.cashOnHand };
     }
 
     isAuthenticated() {

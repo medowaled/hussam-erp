@@ -277,7 +277,7 @@ export function openAssignQuotaModal(userId) {
                                     class="form-control q-prod-input"
                                     data-product-id="${p.id}"
                                     value="${q.allocatedQty || 0}"
-                                    min="${q.soldQty || 0}"
+                                    min="0"
                                     max="${freeStock + (q.allocatedQty - q.soldQty)}"
                                     style="width: 85px; text-align: center; font-weight: 800; font-size: 0.9rem; padding: 0.3rem;"
                                     placeholder="0">
@@ -285,6 +285,13 @@ export function openAssignQuotaModal(userId) {
                         </div>
                     `;
                 }).join('')}
+            </div>
+
+            <div style="margin-top:0.75rem;background:rgba(255,159,26,0.1);border:1px solid rgba(255,159,26,0.3);padding:0.65rem 0.85rem;border-radius:10px;">
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--primary-orange);font-weight:800;cursor:pointer;">
+                    <input type="checkbox" id="q-reset-sold" value="1">
+                    🔄 تصفية السجلات المباعة سابقاً وتجهيز عهدة بضاعة جديدة للمندوب
+                </label>
             </div>
         </div>
     `;
@@ -305,7 +312,9 @@ export function openAssignQuotaModal(userId) {
             productQuotas[pId] = val;
         });
 
-        const res = state.assignEmployeeQuota(userId, { assignedCustomers, productQuotas });
+        const resetSoldQty = document.getElementById('q-reset-sold')?.checked || false;
+
+        const res = state.assignEmployeeQuota(userId, { assignedCustomers, productQuotas, resetSoldQty });
         if (!res.success) {
             alert(res.message);
             return false;
@@ -316,6 +325,60 @@ export function openAssignQuotaModal(userId) {
     }, '✅ حفظ وتأكيد العُهدة');
 }
 window.openAssignQuotaModal = openAssignQuotaModal;
+
+/* ─── Admin Collect Cash from Delegate Modal ─────────────────────── */
+export function openCollectDelegateCashModal(userId) {
+    const user = state.users.find(u => u.id === userId);
+    if (!user) return;
+
+    const currentCashHand = Number(user.delegateCashHand) || 0;
+
+    const body = `
+        <form onsubmit="return false;">
+            <div style="background:#0f1524;border:1px solid var(--border-color);border-radius:12px;padding:1rem;margin-bottom:1.25rem;">
+                <div style="font-weight:900;color:#fff;font-size:1.05rem;">👤 المندوب: ${user.name}</div>
+                <div style="font-size:0.8rem;color:var(--primary-orange);margin-top:0.25rem;">المسمى الوظيفي: ${user.role || 'مندوب مبيعات'}</div>
+                <div style="font-size:1.15rem;font-weight:900;color:var(--accent-teal);margin-top:0.6rem;">
+                    💵 إجمالي النقدية المحصلة مع المندوب الآن: ${currentCashHand.toLocaleString('ar-EG')} ج.م
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" style="font-weight:800;color:var(--primary-orange);">المبلغ المحصل وتوريده للخزينة (ج.م) *</label>
+                <input type="number" id="m-collect-amount" class="form-control" value="${currentCashHand}" min="1" max="${currentCashHand || 1000000}" style="font-size:1.25rem;font-weight:900;color:var(--accent-teal);" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">البيان / ملاحظات التحصيل</label>
+                <input type="text" id="m-collect-notes" class="form-control" placeholder="مثال: استلام نقدية عهدة مبيعات خط بنها..." value="استلام نقدية عهدة مبيعات المندوب">
+            </div>
+
+            <div style="background:rgba(0,200,151,0.08);border:1px solid rgba(0,200,151,0.25);border-radius:10px;padding:0.75rem;font-size:0.8rem;color:var(--accent-teal);font-weight:700;">
+                💡 يتم خصم هذا المبلغ فورياً من ذمة المندوب وإضافته لرصيد السيولة النقدية بالخزينة الرئيسية للنظام.
+            </div>
+        </form>
+    `;
+
+    openModalHTML(`💵 تحصيل مبالغ نقدية من المندوب (${user.name})`, body, () => {
+        const amount = Number(document.getElementById('m-collect-amount')?.value || 0);
+        const notes = document.getElementById('m-collect-notes')?.value.trim() || '';
+
+        if (amount <= 0) {
+            alert('يرجى كتابة مبلغ تحصيل صحيح!');
+            return false;
+        }
+
+        const res = state.collectDelegateCash(userId, amount, notes);
+        if (!res.success) {
+            alert(res.message);
+            return false;
+        }
+
+        alert(`✅ تم تحصيل مبلغ ${amount.toLocaleString('ar-EG')} ج.م من المندوب (${user.name}) وتوريدها للخزينة الرئيسية بنجاح!`);
+        return true;
+    }, '✅ تأكيد واستلام المبلغ');
+}
+window.openCollectDelegateCashModal = openCollectDelegateCashModal;
 
 window.qToggleAllCustomers = (checked) => {
     document.querySelectorAll('.q-cust-item').forEach(el => {
@@ -913,6 +976,14 @@ function _renderInvoiceModal(invoice, isConfirmed) {
     const totalPacksCount = invoice.items.reduce((s, i) => s + i.qty, 0);
     const itemsCount = invoice.items.length;
 
+    const previousDebt = invoice.previousDebt !== undefined
+        ? Number(invoice.previousDebt)
+        : (invoice.customerId ? Math.max(0, (state.customers.find(c => c.id == invoice.customerId)?.debt || 0) - invoice.remainingDebt) : 0);
+    const totalDebtBeforePayment = previousDebt + invoice.grandTotal;
+    const totalDebtAfterInvoice = invoice.totalDebtAfterInvoice !== undefined
+        ? Number(invoice.totalDebtAfterInvoice)
+        : (previousDebt + invoice.remainingDebt);
+
     root.innerHTML = `
         <div class="modal-backdrop active" id="current-modal-backdrop">
             <div class="modal-dialog" style="width: 620px; max-width: 96vw;">
@@ -983,17 +1054,33 @@ function _renderInvoiceModal(invoice, isConfirmed) {
                                 <span>- ${invoice.discount} ج.م</span>
                             </div>` : ''}
                             <div class="receipt-totals-row total-bold">
-                                <span>إجمالي قيمة المشتريات:</span>
+                                <span>إجمالي قيمة الفاتورة الجديدة:</span>
                                 <span style="color: #d97706;">${invoice.grandTotal} ج.م</span>
                             </div>
+                            ${previousDebt > 0 ? `
+                            <div class="receipt-totals-row" style="color: #dc2626; font-weight: 800;">
+                                <span>المديونية السابقة للعميل:</span>
+                                <span>${previousDebt.toLocaleString('ar-EG')} ج.م</span>
+                            </div>
+                            <div class="receipt-totals-row" style="color: #7c3aed; font-weight: 900; background: rgba(124, 58, 237, 0.05); padding: 2px 4px; border-radius: 4px;">
+                                <span>إجمالي الدين القديم + الجديد:</span>
+                                <span>${totalDebtBeforePayment.toLocaleString('ar-EG')} ج.م</span>
+                            </div>
+                            ` : ''}
                             <div class="receipt-totals-row">
-                                <span>المبلغ المدفوع كاش:</span>
+                                <span>المبلغ المدفوع كاش الآن:</span>
                                 <span style="color: #059669; font-weight: 800;">${invoice.paidAmount} ج.م</span>
                             </div>
                             <div class="receipt-totals-row due-red">
-                                <span>المتبقي الآجل مستحق السداد:</span>
+                                <span>المتبقي من الفاتورة الجديدة:</span>
                                 <span>${invoice.remainingDebt} ج.م</span>
                             </div>
+                            ${previousDebt > 0 ? `
+                            <div class="receipt-totals-row due-red" style="background: rgba(220, 38, 38, 0.08); padding: 4px; border-radius: 4px; margin-top: 4px; font-weight: 900; font-size: 0.92rem;">
+                                <span>إجمالي الرصيد المتبقي المستحق على العميل:</span>
+                                <span>${totalDebtAfterInvoice.toLocaleString('ar-EG')} ج.م</span>
+                            </div>
+                            ` : ''}
                         </div>
 
                         <div class="receipt-footer-msg">
@@ -1166,6 +1253,61 @@ function _ensureJsPDF(cb) {
 window.sendWhatsappPDF = window.invoiceSendWhatsappPDF;
 window.sendWhatsappImage = window.invoiceSendWhatsappImage;
 
+/* Edit Customer Modal */
+export function openEditCustomerModal(customerId) {
+    const customer = state.customers.find(c => c.id === customerId);
+    if (!customer) {
+        alert('لم يتم العثور على بيانات هذا العميل!');
+        return;
+    }
+
+    const body = `
+        <form onsubmit="return false;">
+            <div class="form-group">
+                <label class="form-label">اسم التاجر / العميل *</label>
+                <input type="text" id="m-edit-c-name" class="form-control" value="${customer.name || ''}" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">اسم المحل / المخبز</label>
+                <input type="text" id="m-edit-c-shop" class="form-control" value="${customer.shopName || ''}">
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label class="form-label">رقم الهاتف / الواتساب</label>
+                    <input type="text" id="m-edit-c-phone" class="form-control" value="${customer.phone || ''}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">المنطقة / العنوان</label>
+                    <input type="text" id="m-edit-c-location" class="form-control" value="${customer.location || ''}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">رصيد المديونية المستحقة على العميل (ج.م)</label>
+                <input type="number" id="m-edit-c-debt" class="form-control" value="${customer.debt || 0}">
+                <small style="color:var(--text-muted);font-size:0.75rem;">يمكنك تعديل رصيد الدين المباشر للعميل عند التسوية أو تصحيح الحسابات.</small>
+            </div>
+        </form>
+    `;
+
+    openModalHTML(`✏️ تعديل بيانات ومستحقات العميل: ${customer.name}`, body, () => {
+        const name = document.getElementById('m-edit-c-name')?.value.trim();
+        const shopName = document.getElementById('m-edit-c-shop')?.value.trim();
+        const phone = document.getElementById('m-edit-c-phone')?.value.trim();
+        const location = document.getElementById('m-edit-c-location')?.value.trim();
+        const debt = Number(document.getElementById('m-edit-c-debt')?.value || 0);
+
+        if (!name) {
+            alert('يرجى ملء اسم العميل!');
+            return false;
+        }
+
+        state.updateCustomer(customer.id, { name, shopName, phone, location, debt });
+        setTimeout(() => showCustomerStatement(customer.id), 150);
+        return true;
+    });
+}
+window.openEditCustomerModal = openEditCustomerModal;
+
 /* ─── Customer Account Statement Modal (كشف حساب العميل) ─────────────────── */
 export function showCustomerStatement(customerId) {
     const customer = state.customers.find(c => c.id === customerId);
@@ -1186,8 +1328,11 @@ export function showCustomerStatement(customerId) {
                 <!-- Header -->
                 <div class="modal-header" style="background: #0f1524; border-bottom: 1px solid var(--border-color);">
                     <div>
-                        <div style="font-weight: 900; color: #fff; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <div style="font-weight: 900; color: #fff; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                             <span>📑</span> كشف حساب عميل: <span style="color: var(--primary-orange);">${customer.name}</span>
+                            <button class="btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.78rem; border-color: var(--primary-orange); color: var(--primary-orange);" onclick="window.openEditCustomerModal(${customer.id})">
+                                ✏️ تعديل العميل
+                            </button>
                         </div>
                         <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem;">
                             ${customer.shopName ? customer.shopName + ' • ' : ''} هاتف: ${customer.phone || 'غير مسجل'} • العنوان: ${customer.location || 'غير محدد'}
@@ -1266,7 +1411,10 @@ export function showCustomerStatement(customerId) {
 
                 <!-- Footer Actions -->
                 <div class="modal-footer" style="background: #0f1524; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
-                    <div style="display: flex; gap: 0.5rem;">
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="btn-primary" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border: none;" onclick="window.openEditCustomerModal(${customer.id})">
+                            ✏️ تعديل البيانات والديون
+                        </button>
                         <button class="btn-secondary" onclick="window.printCustomerStatement('${customer.name}', '${customer.debt}')">
                             🖨️ طباعة كشف الحساب
                         </button>

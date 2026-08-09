@@ -1,13 +1,22 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>حسام ERP v2.5 - نظام تتبع المبيعات والمخزون وحسابات التجار والصلاحيات</title>
-    
+
     <!-- Meta SEO & Description -->
-    <meta name="description" content="نظام حسام ERP v2.5 الإحترافي لإدارة وتتبع مبيعات ومخزون السجائر والمعسل وحسابات التجار والديون وكشوف الحسابات.">
-    
+    <meta name="description"
+        content="نظام حسام ERP v2.5 الإحترافي لإدارة وتتبع مبيعات ومخزون السجائر والمعسل وحسابات التجار والديون وكشوف الحسابات.">
+
+    <!-- PWA Manifest & Web App Meta Tags -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ff9f1a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="حسام ERP">
+
     <!-- Stylesheets -->
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/sidebar.css">
@@ -16,9 +25,12 @@
     <link rel="stylesheet" href="css/tables.css">
     <link rel="stylesheet" href="css/modal.css">
     <link rel="stylesheet" href="css/print.css">
-</head>
-<body>
 
+    <!-- PWA Install Controller -->
+    <script type="module" src="js/pwa-install.js"></script>
+</head>
+
+<body>
     <div class="app-container">
         <!-- Sidebar Navigation -->
         <aside class="sidebar" id="app-sidebar">
@@ -101,7 +113,8 @@
                     </div>
                     <div class="widget-stat-box">
                         <div class="widget-stat-label">القراصص بالمخزن</div>
-                        <div class="widget-stat-value" style="color: var(--accent-teal);" id="sidebar-total-packs">0 قروصة</div>
+                        <div class="widget-stat-value" style="color: var(--accent-teal);" id="sidebar-total-packs">0
+                            قروصة</div>
                     </div>
                 </div>
             </div>
@@ -122,17 +135,23 @@
                 <div class="header-actions">
                     <!-- Notification Wrapper & Dropdown -->
                     <div class="notification-wrapper" id="notification-wrapper" style="position: relative;">
-                        <button class="notification-btn" onclick="window.toggleNotificationsDropdown()" title="الإشعارات والتنبيهات">
+                        <button class="notification-btn" onclick="window.toggleNotificationsDropdown()"
+                            title="الإشعارات والتنبيهات">
                             🔔
                             <span class="notification-badge-count" id="header-unread-count">0</span>
                         </button>
 
                         <div class="notification-dropdown" id="notification-dropdown">
                             <div class="notification-dropdown-header">
-                                <span style="font-weight: 800; color: #fff; font-size: 0.95rem;">🔔 مركز التنبيهات المباشرة</span>
+                                <span style="font-weight: 800; color: #fff; font-size: 0.95rem;">🔔 مركز التنبيهات
+                                    المباشرة</span>
                                 <div style="display: flex; align-items: center; gap: 0.6rem;">
-                                    <button style="background: transparent; border: none; color: #ef4444; font-size: 0.78rem; cursor: pointer; text-decoration: underline;" onclick="window.clearAllNotificationsFromDropdown()">🗑️ مسح الكل</button>
-                                    <button style="background: transparent; border: none; color: var(--primary-orange); font-size: 0.78rem; cursor: pointer; text-decoration: underline;" onclick="window.appRouter('notifications')">عرض الكل ←</button>
+                                    <button
+                                        style="background: transparent; border: none; color: #ef4444; font-size: 0.78rem; cursor: pointer; text-decoration: underline;"
+                                        onclick="window.clearAllNotificationsFromDropdown()">🗑️ مسح الكل</button>
+                                    <button
+                                        style="background: transparent; border: none; color: var(--primary-orange); font-size: 0.78rem; cursor: pointer; text-decoration: underline;"
+                                        onclick="window.appRouter('notifications')">عرض الكل ←</button>
                                 </div>
                             </div>
                             <div class="notification-dropdown-list" id="notification-dropdown-list">
@@ -143,7 +162,8 @@
 
                     <!-- Profile Dropdown -->
                     <div class="profile-wrapper" id="profile-wrapper">
-                        <div class="profile-card" id="profile-card-btn" onclick="window.toggleProfileMenu()" style="cursor: pointer; user-select: none;">
+                        <div class="profile-card" id="profile-card-btn" onclick="window.toggleProfileMenu()"
+                            style="cursor: pointer; user-select: none;">
                             <div class="profile-avatar">ح</div>
                             <div class="profile-info">
                                 <div class="profile-name">حسام حسني</div>
@@ -218,4 +238,5 @@
     <!-- Application ES Modules JavaScript -->
     <script type="module" src="js/app.js"></script>
 </body>
+
 </html>

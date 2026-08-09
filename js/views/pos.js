@@ -224,18 +224,21 @@ function renderMainPosView(user) {
                                 </div>
                                 <div class="product-title-text" style="margin:0.4rem 0 0.35rem;">${p.name}</div>
                                 <div class="product-info-row">
-                                    <span style="color:var(--text-muted);font-size:0.78rem;">سعر القروصة:</span>
-                                    <span style="font-weight:800;color:var(--primary-orange);font-size:0.9rem;">${p.sellPrice} ج.م</span>
+                                    <span class="info-label">سعر القروصة:</span>
+                                    <span class="info-value" style="color:var(--primary-orange);">${p.sellPrice} ج.م</span>
                                 </div>
                                 <div class="product-info-row">
-                                    <span style="color:var(--text-muted);font-size:0.78rem;">المتاح بالمخزن:</span>
-                                    <span style="font-weight:800;font-size:0.85rem;color:${p.stockPacks <= p.minStockPacks ? 'var(--accent-red)' : 'var(--accent-teal)'};">
+                                    <span class="info-label">المتاح بالمخزن:</span>
+                                    <span class="info-value" style="color:${p.stockPacks <= p.minStockPacks ? 'var(--accent-red)' : 'var(--accent-teal)'};">
                                         ${p.stockPacks} قروصة
                                     </span>
                                 </div>
                             </div>
-                            <button class="btn-add-item-green" onclick="window.posAddToCart(${p.id})">
-                                + إضافة (1 قروصة) بسعر ${p.sellPrice} ج
+                            <button
+                                class="btn-add-item-green"
+                                style="${p.stockPacks <= 0 ? 'background:#374151;color:#9ca3af;cursor:not-allowed;' : ''}"
+                                onclick="window.posAddToCart(${p.id})">
+                                ${p.stockPacks <= 0 ? '⚠️ نافد من المخزن' : `+ إضافة (1 قروصة) بسعر ${p.sellPrice} ج`}
                             </button>
                         </div>
                     `).join('')}
@@ -256,12 +259,13 @@ function renderMainPosView(user) {
                 <!-- Customer Selector -->
                 <div style="margin-bottom:0.85rem;">
                     <label class="form-label" style="font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">اختر العميل المشتري *</label>
-                    <select class="form-control" id="pos-customer-select" style="font-size:0.82rem;">
+                    <select class="form-control" id="pos-customer-select" style="font-size:0.82rem;" onchange="window.posOnCustomerSelectChange(this.value)">
                         <option value="">-- بيع مباشر لعميل كاش نقدي --</option>
                         ${availableCustomers.map(c => `
-                            <option value="${c.id}">${c.name} (${c.shopName || 'تاجر'}) - مدين: ${c.debt} ج.م</option>
+                            <option value="${c.id}">${c.name} (${c.shopName || 'تاجر'}) - مدين سابقاً: ${c.debt} ج.م</option>
                         `).join('')}
                     </select>
+                    <div id="pos-customer-debt-box" style="margin-top:0.6rem;"></div>
                 </div>
 
                 <!-- Cart Items -->
@@ -355,10 +359,11 @@ function renderAdminEmployeePosHubView() {
                     ? 'كافة العملاء'
                     : Array.isArray(emp.assignedCustomers) ? `${emp.assignedCustomers.length} عملاء` : '0 عملاء';
 
-                // Calculate today's sales for employee
-                const empSalesToday = state.invoices
-                    .filter(inv => String(inv.sellerId) === String(emp.id) || inv.sellerName === emp.name)
-                    .reduce((sum, inv) => sum + inv.grandTotal, 0);
+                // Calculate employee financial breakdown & custody metrics
+                const empInvoices = state.invoices.filter(inv => String(inv.sellerId) === String(emp.id) || inv.sellerName === emp.name);
+                const empSalesToday = empInvoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
+                const empCustomerDebts = empInvoices.reduce((sum, inv) => sum + (inv.remainingDebt || 0), 0);
+                const empCashHand = Number(emp.delegateCashHand) || 0;
 
                 return `
                     <div class="emp-pos-card" style="${isBlocked ? 'opacity:0.75;background:#111726;' : ''}">
@@ -367,7 +372,7 @@ function renderAdminEmployeePosHubView() {
                                 <div class="emp-avatar-circle">${emp.name ? emp.name.charAt(0) : 'م'}</div>
                                 <div>
                                     <div style="font-size:1.1rem;font-weight:900;color:#fff;">${emp.name}</div>
-                                    <div style="font-size:0.75rem;color:var(--text-muted);font-family:monospace;">${emp.username}</div>
+                                    <div style="font-size:0.75rem;color:var(--text-muted);font-family:monospace;">${emp.username} • ${emp.role || 'مندوب مبيعات'}</div>
                                 </div>
                             </div>
                             <span class="badge ${isBlocked ? 'badge-red' : 'badge-teal'}">
@@ -378,7 +383,7 @@ function renderAdminEmployeePosHubView() {
                         <!-- Metrics Box -->
                         <div class="emp-metrics-box">
                             <div>
-                                <div class="emp-metric-sub">الأصناف والكميات</div>
+                                <div class="emp-metric-sub">العهدة المتاحة للمندوب</div>
                                 <div class="emp-metric-val" style="color:var(--primary-orange);">${allocatedItemCount} أصناف (${totalAllocPacks} قروصة)</div>
                             </div>
                             <div>
@@ -387,13 +392,29 @@ function renderAdminEmployeePosHubView() {
                             </div>
                         </div>
 
-                        <div style="font-size:0.8rem;color:var(--text-muted);display:flex;justify-content:space-between;padding:0 0.2rem;">
-                            <span>إجمالي مبيعات اليوم للموظف:</span>
-                            <strong style="color:var(--primary-orange);font-weight:900;">${empSalesToday.toLocaleString('ar-EG')} ج.م</strong>
+                        <!-- Financial Custody & Collection Breakdown (User Prompt Requirement) -->
+                        <div style="background:#090e1a;border:1px solid var(--border-color);border-radius:12px;padding:0.75rem;display:flex;flex-direction:column;gap:0.45rem;font-size:0.8rem;">
+                            <div class="flex-between">
+                                <span style="color:var(--text-muted);">إجمالي مبيعات المندوب:</span>
+                                <strong style="color:var(--primary-orange);font-weight:900;">${empSalesToday.toLocaleString('ar-EG')} ج.م</strong>
+                            </div>
+                            <div class="flex-between">
+                                <span style="color:var(--text-muted);">💵 نقود محصلة مع المندوب:</span>
+                                <strong style="color:var(--accent-teal);font-weight:900;">${empCashHand.toLocaleString('ar-EG')} ج.م</strong>
+                            </div>
+                            <div class="flex-between">
+                                <span style="color:var(--text-muted);">👥 ديون العملاء من مبيعاته:</span>
+                                <strong style="color:var(--accent-purple);font-weight:900;">${empCustomerDebts.toLocaleString('ar-EG')} ج.م</strong>
+                            </div>
                         </div>
 
                         <!-- Employee Action Buttons -->
                         <div class="emp-card-actions">
+                            ${empCashHand > 0 ? `
+                                <button class="btn-primary" style="background:var(--accent-teal);color:#000;border:none;font-size:0.85rem;padding:0.55rem;" onclick="window.openCollectDelegateCashModal(${emp.id})">
+                                    💵 تحصيل المبلغ من المندوب (${empCashHand.toLocaleString('ar-EG')} ج)
+                                </button>
+                            ` : ''}
                             <button class="btn-enter-emp-pos" onclick="window.posEnterEmployeePos(${emp.id})">
                                 🛒 دخول نقطة بيعه
                             </button>
@@ -412,7 +433,6 @@ function renderAdminEmployeePosHubView() {
                     </div>
                 `;
             }).join('')}
-        </div>
     `;
 }
 
@@ -537,12 +557,12 @@ function renderDedicatedEmployeePosView(empId, isEnteredByAdmin = false) {
                                         </div>
                                         <div class="product-title-text" style="margin:0.4rem 0 0.35rem;">${p.name}</div>
                                         <div class="product-info-row">
-                                            <span style="color:var(--text-muted);font-size:0.78rem;">سعر القروصة:</span>
-                                            <span style="font-weight:800;color:var(--primary-orange);font-size:0.9rem;">${p.sellPrice} ج.م</span>
+                                            <span class="info-label">سعر القروصة:</span>
+                                            <span class="info-value" style="color:var(--primary-orange);">${p.sellPrice} ج.م</span>
                                         </div>
                                         <div class="product-info-row">
-                                            <span style="color:var(--text-muted);font-size:0.78rem;">المتاح للبيع:</span>
-                                            ${statusBadge}
+                                            <span class="info-label">المتاح للبيع:</span>
+                                            <span class="info-value">${statusBadge}</span>
                                         </div>
                                     </div>
                                     <button
@@ -572,12 +592,13 @@ function renderDedicatedEmployeePosView(empId, isEnteredByAdmin = false) {
                 <!-- Customer Selector -->
                 <div style="margin-bottom:0.85rem;">
                     <label class="form-label" style="font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">اختر العميل المشتري *</label>
-                    <select class="form-control" id="pos-customer-select" style="font-size:0.82rem;">
+                    <select class="form-control" id="pos-customer-select" style="font-size:0.82rem;" onchange="window.posOnCustomerSelectChange(this.value)">
                         <option value="">-- بيع مباشر لعميل كاش نقدي --</option>
                         ${availableCustomers.map(c => `
-                            <option value="${c.id}">${c.name} (${c.shopName || 'تاجر'}) - مدين: ${c.debt} ج.م</option>
+                            <option value="${c.id}">${c.name} (${c.shopName || 'تاجر'}) - مدين سابقاً: ${c.debt} ج.م</option>
                         `).join('')}
                     </select>
+                    <div id="pos-customer-debt-box" style="margin-top:0.6rem;"></div>
                 </div>
 
                 <!-- Cart Items -->
@@ -776,6 +797,73 @@ window.posRecalculateTotals = () => {
         elPaid.value = grandTotal;
         state.currentPOSPaid = grandTotal;
     }
+
+    window.updateCustomerDebtSummaryBox();
+};
+
+window.posOnCustomerSelectChange = (customerId) => {
+    window.updateCustomerDebtSummaryBox(customerId);
+};
+
+window.updateCustomerDebtSummaryBox = (custVal = null) => {
+    const box = document.getElementById('pos-customer-debt-box');
+    if (!box) return;
+
+    const select = document.getElementById('pos-customer-select');
+    const customerId = custVal !== null ? custVal : (select ? select.value : '');
+
+    if (!customerId) {
+        box.innerHTML = '';
+        return;
+    }
+
+    const customer = state.customers.find(c => c.id == customerId);
+    if (!customer) {
+        box.innerHTML = '';
+        return;
+    }
+
+    const cartItems = state.cart;
+    const subtotal = cartItems.reduce((sum, item) => sum + (item.unitPrice * item.qty), 0);
+    const discount = Number(document.getElementById('pos-discount-input')?.value || 0);
+    const currentInvoiceTotal = Math.max(0, subtotal - discount);
+
+    const paidInput = document.getElementById('pos-paid-input');
+    const paidAmount = Number(paidInput ? paidInput.value : currentInvoiceTotal);
+
+    const previousDebt = Number(customer.debt) || 0;
+    const totalDebtBeforePayment = previousDebt + currentInvoiceTotal;
+    const newInvoiceRemaining = Math.max(0, currentInvoiceTotal - paidAmount);
+    const totalDebtAfterInvoice = previousDebt + newInvoiceRemaining;
+
+    box.innerHTML = `
+        <div style="background:#090e1a;border:1px solid rgba(255,159,26,0.3);border-radius:10px;padding:0.75rem;font-size:0.8rem;display:flex;flex-direction:column;gap:0.4rem;">
+            <div class="flex-between">
+                <span style="color:var(--text-muted);">المديونية السابقة للعميل:</span>
+                <strong style="color:var(--accent-red);font-weight:900;">${previousDebt.toLocaleString('ar-EG')} ج.م</strong>
+            </div>
+            <div class="flex-between">
+                <span style="color:var(--text-muted);">إجمالي الفاتورة الجديدة:</span>
+                <strong style="color:#60a5fa;font-weight:900;">${currentInvoiceTotal.toLocaleString('ar-EG')} ج.م</strong>
+            </div>
+            <div class="flex-between" style="border-top:1px dashed var(--border-color);padding-top:0.3rem;">
+                <span style="color:#fff;font-weight:800;">إجمالي الدين القديم + الجديد:</span>
+                <strong style="color:var(--accent-purple);font-weight:900;">${totalDebtBeforePayment.toLocaleString('ar-EG')} ج.م</strong>
+            </div>
+            <div class="flex-between">
+                <span style="color:var(--text-muted);">الدفعة المحصلة الآن:</span>
+                <strong style="color:var(--accent-teal);font-weight:900;">${paidAmount.toLocaleString('ar-EG')} ج.م</strong>
+            </div>
+            <div class="flex-between">
+                <span style="color:var(--text-muted);">المتبقي من الفاتورة الجديدة:</span>
+                <strong style="color:var(--primary-orange);font-weight:900;">${newInvoiceRemaining.toLocaleString('ar-EG')} ج.م</strong>
+            </div>
+            <div class="flex-between" style="background:rgba(239,68,68,0.12);padding:0.4rem 0.6rem;border-radius:6px;border:1px solid rgba(239,68,68,0.3);margin-top:0.2rem;">
+                <span style="color:#fff;font-weight:900;">إجمالي الرصيد المتبقي على العميل:</span>
+                <strong style="color:var(--accent-red);font-weight:900;font-size:0.95rem;">${totalDebtAfterInvoice.toLocaleString('ar-EG')} ج.م</strong>
+            </div>
+        </div>
+    `;
 };
 
 window.posProcessCheckout = () => {

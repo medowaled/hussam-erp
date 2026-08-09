@@ -26,8 +26,9 @@ const viewsMap = {
 function hasPermission(viewName) {
     if (!state.currentUser) return false;
     const perms = state.currentUser.permissions || [];
-    if (perms.includes('all')) return true;
-    if (viewName === 'dashboard' || viewName === 'notifications') return true;
+    const isAll = state.currentUser.role === 'مدير عام' || perms.includes('all');
+    if (isAll) return true;
+    if (viewName === 'notifications') return true;
     return perms.includes(viewName);
 }
 
@@ -118,7 +119,9 @@ function filterMobileBottomNav() {
 
     document.querySelectorAll('.mobile-nav-item[data-view]').forEach(btn => {
         const view = btn.dataset.view;
-        if (isAll || perms.includes(view) || view === 'dashboard' || view === 'notifications') {
+        if (isAll) {
+            btn.style.display = 'flex';
+        } else if (view !== 'dashboard' && (perms.includes(view) || view === 'notifications')) {
             btn.style.display = 'flex';
         } else {
             btn.style.display = 'none';
@@ -250,7 +253,7 @@ function filterSidebarPermissions() {
         const v = item.dataset.view;
         if (isAll) {
             item.style.display = 'flex';
-        } else if (perms.includes(v)) {
+        } else if (v !== 'dashboard' && perms.includes(v)) {
             item.style.display = 'flex';
         } else {
             item.style.display = 'none';
@@ -468,8 +471,8 @@ window.clearAllNotificationsFromDropdown = () => {
 window.logoutUser = () => {
     if (confirm('هل أنت متأكد من تسجيل الخروج من النظام؟')) {
         state.logout();
-        // Hard redirect using replace(): it swaps the current history entry
-        // so the browser Back button cannot restore the logged-in app.
-        window.location.replace('index.html');
+        const dropdown = document.getElementById('profile-dropdown');
+        if (dropdown) dropdown.classList.remove('open');
+        window.renderAppLayout();
     }
 };

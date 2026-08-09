@@ -1,8 +1,9 @@
 import { state } from '../state.js';
 
 export function renderCustomersView() {
-    const customers = state.customers;
+    const customers = state.getAvailableCustomersForUser();
     const totalDebts = customers.reduce((sum, c) => sum + c.debt, 0);
+    const isEmployee = state.currentUser && state.currentUser.role !== 'مدير عام' && (!state.currentUser.permissions || !state.currentUser.permissions.includes('all'));
 
     return `
         <!-- Banner Header -->
@@ -31,7 +32,7 @@ export function renderCustomersView() {
                         💳 إجمالي الديون المستحقة بالسوق
                     </div>
                     <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">
-                        مجموع المستحقات على محلات التجزئة والتجار.
+                        ${isEmployee ? 'مجموع المستحقات على العملاء المخصصين لك.' : 'مجموع المستحقات على محلات التجزئة والتجار.'}
                     </div>
                 </div>
                 <div style="font-size: 1.75rem; font-weight: 900; color: var(--primary-orange);">
@@ -47,7 +48,7 @@ export function renderCustomersView() {
                     <input type="text" placeholder="البحث السريع باسم العميل أو رقم الهاتف..." oninput="window.filterCustomersGrid(this.value)">
                     <span class="search-icon">🔍</span>
                 </div>
-                <span class="badge badge-blue">كافة العملاء (${customers.length})</span>
+                <span class="badge badge-blue">${isEmployee ? 'العملاء المخصصين لك' : 'كافة العملاء'} (${customers.length})</span>
             </div>
 
             ${customers.length === 0 ? `
@@ -100,12 +101,15 @@ export function renderCustomersView() {
                                 </div>
                             </div>
 
-                            <div style="display: flex; gap: 0.5rem;">
-                                <button class="btn-primary" style="flex: 1; font-size: 0.8rem; padding: 0.4rem; background: var(--accent-teal); border: none;" onclick="window.openPaymentModal(${c.id})">
+                            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                                <button class="btn-primary" style="flex: 1; min-width: 75px; font-size: 0.78rem; padding: 0.4rem; background: var(--accent-teal); border: none;" onclick="window.openPaymentModal(${c.id})">
                                     💵 سند قبض
                                 </button>
-                                <button class="btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 0.4rem;" onclick="window.showCustomerStatement(${c.id})">
+                                <button class="btn-secondary" style="flex: 1; min-width: 75px; font-size: 0.78rem; padding: 0.4rem;" onclick="window.showCustomerStatement(${c.id})">
                                     📑 كشف حساب
+                                </button>
+                                <button class="btn-secondary" style="font-size: 0.78rem; padding: 0.4rem 0.6rem; border-color: var(--primary-orange); color: var(--primary-orange);" onclick="window.openEditCustomerModal(${c.id})" title="تعديل البيانات والديون">
+                                    ✏️ تعديل
                                 </button>
                             </div>
                         </div>

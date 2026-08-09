@@ -83,10 +83,6 @@
     .profile-info {
         display: none !important; /* Hide long name text on phone to save header space */
     }
-    .notification-dropdown {
-        width: 290px !important;
-        right: -80px !important;
-    }
 }
 
 .notification-btn {
@@ -293,17 +289,146 @@
     border-color: #ef4444;
 }
 
-/* Mobile: keep notification action buttons visible & tappable */
-@media (max-width: 640px) {
+/* Mobile: keep notification action buttons visible & tappable, full-width non-clipped overlay */
+@media (max-width: 768px) {
+    .notification-dropdown {
+        position: fixed !important;
+        top: 60px !important;
+        left: 8px !important;
+        right: 8px !important;
+        width: calc(100vw - 16px) !important;
+        max-width: 480px !important;
+        margin: 0 auto !important;
+        z-index: 10000 !important;
+        box-shadow: 0 12px 45px rgba(0, 0, 0, 0.95) !important;
+        border-radius: 14px !important;
+    }
+    .notification-dropdown-header {
+        padding: 0.75rem 0.85rem !important;
+        flex-wrap: wrap !important;
+        gap: 0.4rem !important;
+    }
+    .notification-dropdown-header span {
+        font-size: 0.88rem !important;
+    }
+    .notification-dropdown-list {
+        max-height: 65vh !important;
+    }
     .notification-item-row {
         flex-wrap: wrap;
+        padding: 0.75rem 0.85rem !important;
     }
     .notification-item-row button {
-        font-size: 1.05rem !important;
-        min-width: 38px;
-        min-height: 38px;
+        font-size: 1rem !important;
+        min-width: 36px;
+        min-height: 36px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
+    }
+}
+
+/* 📲 Floating PWA Installation Banner (تطبيق الموبايل) */
+.pwa-install-banner {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    max-width: 520px;
+    margin: 0 auto;
+    background: linear-gradient(135deg, #141c2e 0%, #0c1220 100%);
+    border: 2px solid var(--primary-orange);
+    border-radius: 16px;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.85);
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    animation: pwaSlideUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes pwaSlideUp {
+    from {
+        transform: translateY(100px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.pwa-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.pwa-icon {
+    font-size: 2.2rem;
+    background: var(--primary-orange-light);
+    padding: 0.5rem;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pwa-text-box .pwa-title {
+    font-weight: 900;
+    color: #fff;
+    font-size: 1.05rem;
+}
+
+.pwa-text-box .pwa-sub {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.2rem;
+    line-height: 1.35;
+}
+
+.pwa-banner-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.btn-pwa-install {
+    flex: 1;
+    background: linear-gradient(135deg, #ff9f1a 0%, #e68a17 100%);
+    color: #000;
+    font-weight: 900;
+    font-size: 0.95rem;
+    border: none;
+    padding: 0.65rem 1rem;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(255, 159, 26, 0.4);
+    transition: all 0.2s ease;
+}
+
+.btn-pwa-install:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(255, 159, 26, 0.55);
+}
+
+.btn-pwa-dismiss {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    padding: 0.65rem 1rem;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+@media (max-width: 768px) {
+    .pwa-install-banner {
+        left: 10px;
+        right: 10px;
+        bottom: 75px; /* Above mobile bottom nav */
+        padding: 0.85rem 1rem;
     }
 }
