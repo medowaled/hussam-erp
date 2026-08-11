@@ -924,27 +924,40 @@ window.openAddCustomerModal = openAddCustomerModal;
 
 /* Payment Receipt Modal */
 export function openPaymentModal(customerId) {
-    const customer = state.customers.find(c => c.id === customerId);
-    if (!customer) return;
+    const customer = state.customers.find(c => String(c.id) === String(customerId));
+    if (!customer) {
+        alert('لم يتم العثور على بيانات هذا العميل!');
+        return;
+    }
+
+    const defaultVal = customer.debt > 0 ? customer.debt : '';
 
     const body = `
-        <div style="background: #0f1524; padding: 1rem; border-radius: 10px; margin-bottom: 1rem;">
-            <div style="font-weight: 800; color: #fff;">${customer.name}</div>
-            <div style="font-size: 0.85rem; color: var(--accent-red); margin-top: 0.25rem;">إجمالي الدين الحالي المستحق: ${customer.debt} ج.م</div>
+        <div style="background: #0f1524; padding: 1rem; border-radius: 10px; margin-bottom: 1rem; border: 1px solid var(--border-color);">
+            <div style="font-weight: 800; color: #fff; font-size: 1.05rem;">👤 التاجر / العميل: ${customer.name}</div>
+            <div style="font-size: 0.85rem; color: ${customer.debt > 0 ? 'var(--accent-red)' : 'var(--accent-teal)'}; margin-top: 0.3rem; font-weight: 700;">
+                ${customer.debt > 0 ? `⚠️ إجمالي الدين المستحق حالياً: ${customer.debt.toLocaleString('ar-EG')} ج.م` : '✅ هذا العميل خالي الديون (يمكنك إدخال دفعة/سند قبض لحسابه)'}
+            </div>
         </div>
         <div class="form-group">
-            <label class="form-label">المبلغ المسدد الآن (ج.م) *</label>
-            <input type="number" id="m-pay-amount" class="form-control" value="${customer.debt}" min="1" max="${customer.debt || 100000}">
+            <label class="form-label" style="font-weight: 800; color: var(--primary-orange);">المبلغ المسدد الآن بسند القبض (ج.م) *</label>
+            <input type="number" id="m-pay-amount" class="form-control" placeholder="أدخل المبلغ المسدد (مثال: 5000)" value="${defaultVal}" min="1" step="any" autofocus required style="font-size: 1.1rem; font-weight: 800; color: var(--accent-teal);">
         </div>
     `;
 
-    openModalHTML('💵 تسجيل سند قبض جديد', body, () => {
-        const amount = Number(document.getElementById('m-pay-amount')?.value);
-        if (amount && amount > 0) {
-            state.addCustomerPayment(customerId, amount);
-            return true;
+    openModalHTML(`💵 تسجيل سند قبض جديد (${customer.name})`, body, () => {
+        const amountEl = document.getElementById('m-pay-amount');
+        const amount = Number(amountEl?.value);
+        if (!amount || isNaN(amount) || amount <= 0) {
+            alert('⚠️ يرجى إدخال مبلغ صحيح لسند القبض أكبر من 0 جنيه!');
+            if (amountEl) amountEl.focus();
+            return false;
         }
-        return false;
+
+        state.addCustomerPayment(customer.id, amount);
+        alert(`✅ تم حفظ سند القبض بنجاح بمبلغ ${amount.toLocaleString('ar-EG')} ج.م وتم توريدها فورياً لرصيد السيولة النقدية بالخزينة!`);
+        if (window.renderCurrentView) window.renderCurrentView();
+        return true;
     }, 'تأكيد وحفظ سند القبض');
 }
 window.openPaymentModal = openPaymentModal;
@@ -1330,6 +1343,9 @@ export function showCustomerStatement(customerId) {
                     <div>
                         <div style="font-weight: 900; color: #fff; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                             <span>📑</span> كشف حساب عميل: <span style="color: var(--primary-orange);">${customer.name}</span>
+                            <button class="btn-primary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; background: var(--accent-teal); border: none;" onclick="window.openPaymentModal(${customer.id})">
+                                💵 تسجيل سند قبض
+                            </button>
                             <button class="btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.78rem; border-color: var(--primary-orange); color: var(--primary-orange);" onclick="window.openEditCustomerModal(${customer.id})">
                                 ✏️ تعديل العميل
                             </button>
@@ -1412,6 +1428,9 @@ export function showCustomerStatement(customerId) {
                 <!-- Footer Actions -->
                 <div class="modal-footer" style="background: #0f1524; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="btn-primary" style="background: var(--accent-teal); border: none;" onclick="window.openPaymentModal(${customer.id})">
+                            💵 تسجيل سند قبض جديد
+                        </button>
                         <button class="btn-primary" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border: none;" onclick="window.openEditCustomerModal(${customer.id})">
                             ✏️ تعديل البيانات والديون
                         </button>

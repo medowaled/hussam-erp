@@ -14,13 +14,25 @@ export function renderReportsView() {
         return String(inv.sellerId) === String(activeSellerFilter) || inv.sellerName === activeSellerFilter;
     });
 
-    const totalDebts = customers.reduce((sum, c) => sum + c.debt, 0);
-    const inventoryCost = state.products.reduce((sum, p) => sum + (p.buyPrice * p.stockPacks), 0);
-    const inventoryExpected = state.products.reduce((sum, p) => sum + (p.sellPrice * p.stockPacks), 0);
-    const cashOnHand = 60; // Base cash balance
+    const selectedSeller = activeSellerFilter !== 'all' ? users.find(u => String(u.id) === String(activeSellerFilter)) : null;
+    
+    // Customer debts filtered by seller if selected
+    const relevantCustomers = selectedSeller ? state.getAvailableCustomersForUser(selectedSeller) : customers;
+    const totalDebts = relevantCustomers.reduce((sum, c) => sum + (Number(c.debt) || 0), 0);
+    
+    const inventoryCost = state.products.reduce((sum, p) => sum + ((Number(p.buyPrice) || 0) * (Number(p.stockPacks) || 0)), 0);
+    const inventoryExpected = state.products.reduce((sum, p) => sum + ((Number(p.sellPrice) || 0) * (Number(p.stockPacks) || 0)), 0);
 
-    const totalRevenue = invoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
-    const totalNetProfit = invoices.reduce((sum, inv) => sum + (inv.netProfit || 0), 0);
+    // Cash liquidity (For selected seller -> their cash hand, For all -> total liquidity)
+    const cashOnHand = selectedSeller 
+        ? (Number(selectedSeller.delegateCashHand) || 0) 
+        : state.getTotalLiquidity();
+
+    const mainCash = Number(state.cashOnHand) || 0;
+    const delegatesCash = state.getDelegatesTotalCash();
+
+    const totalRevenue = invoices.reduce((sum, inv) => sum + (Number(inv.grandTotal) || 0), 0);
+    const totalNetProfit = invoices.reduce((sum, inv) => sum + (Number(inv.netProfit) || 0), 0);
 
     return `
         <!-- Banner Header -->
@@ -39,7 +51,7 @@ export function renderReportsView() {
         <!-- Position Summary Cards -->
         <div class="card-dark" style="margin-bottom: 1.5rem;">
             <div style="font-size: 1.05rem; font-weight: 800; margin-bottom: 1rem; color: var(--primary-orange); display: flex; align-items: center; gap: 0.5rem;">
-                📋 تقرير "إداني دائماً" (ملخص الموقف المالي للنشاط)
+                📋 تقرير "إداني دائماً" (ملخص الموقف المالي ${selectedSeller ? `للمندوب: ${selectedSeller.name}` : 'للنشاط الكامل'})
             </div>
 
             <div class="grid-3">
@@ -48,7 +60,7 @@ export function renderReportsView() {
                     <div style="font-size: 1.6rem; font-weight: 900; color: var(--accent-purple); margin-top: 0.4rem;">
                         ${totalDebts.toLocaleString('ar-EG')} <span style="font-size: 0.85rem;">ج.م</span>
                     </div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">مجموع المستحقات على محلات التجزئة والتجار</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">${selectedSeller ? `مستحقات عملاء المندوب (${selectedSeller.name})` : 'مجموع المستحقات على محلات التجزئة والتجار'}</div>
                 </div>
 
                 <div style="background: #0f1524; padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-color);">
@@ -60,11 +72,11 @@ export function renderReportsView() {
                 </div>
 
                 <div style="background: #0f1524; padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-color);">
-                    <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 700;">3. معايا فلوس كام (نقدية متوفرة)</div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 700;">3. معايا فلوس كام (السيولة المتوفرة)</div>
                     <div style="font-size: 1.6rem; font-weight: 900; color: var(--accent-teal); margin-top: 0.4rem;">
                         ${cashOnHand.toLocaleString('ar-EG')} <span style="font-size: 0.85rem;">ج.م</span>
                     </div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">الخزينة الرئيسية</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">${selectedSeller ? `نقدية بعُهدة المندوب (${selectedSeller.name})` : `خزينة رئيسية (${mainCash.toLocaleString('ar-EG')} ج) + مناديب (${delegatesCash.toLocaleString('ar-EG')} ج)`}</div>
                 </div>
             </div>
         </div>

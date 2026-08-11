@@ -361,8 +361,9 @@ function renderAdminEmployeePosHubView() {
 
                 // Calculate employee financial breakdown & custody metrics
                 const empInvoices = state.invoices.filter(inv => String(inv.sellerId) === String(emp.id) || inv.sellerName === emp.name);
-                const empSalesToday = empInvoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
-                const empCustomerDebts = empInvoices.reduce((sum, inv) => sum + (inv.remainingDebt || 0), 0);
+                const empSalesToday = empInvoices.reduce((sum, inv) => sum + (Number(inv.grandTotal) || 0), 0);
+                const empCustomers = state.getAvailableCustomersForUser(emp);
+                const empCustomerDebts = empCustomers.reduce((sum, c) => sum + (Number(c.debt) || 0), 0);
                 const empCashHand = Number(emp.delegateCashHand) || 0;
 
                 return `
@@ -403,7 +404,7 @@ function renderAdminEmployeePosHubView() {
                                 <strong style="color:var(--accent-teal);font-weight:900;">${empCashHand.toLocaleString('ar-EG')} ج.م</strong>
                             </div>
                             <div class="flex-between">
-                                <span style="color:var(--text-muted);">👥 ديون العملاء من مبيعاته:</span>
+                                <span style="color:var(--text-muted);">👥 ديون العملاء المخصصين له:</span>
                                 <strong style="color:var(--accent-purple);font-weight:900;">${empCustomerDebts.toLocaleString('ar-EG')} ج.م</strong>
                             </div>
                         </div>
@@ -423,10 +424,10 @@ function renderAdminEmployeePosHubView() {
                             </button>
                             <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;">
                                 <button class="btn-secondary" style="font-size:0.75rem;padding:0.4rem;" onclick="window.openEditUserModal(${emp.id})">
-                                    🔑 كلمة السر
+                                    ✏️ تعديل البيانات
                                 </button>
-                                <button class="btn-secondary" style="font-size:0.75rem;padding:0.4rem;color:${isBlocked ? 'var(--accent-teal)' : 'var(--accent-red)'};" onclick="window.toggleUserStatusHandler(${emp.id})">
-                                    ${isBlocked ? 'تفعيل الحساب' : 'إيقاف الحساب'}
+                                <button class="${isBlocked ? 'btn-primary' : 'btn-danger'}" style="font-size:0.75rem;padding:0.4rem;" onclick="window.toggleUserStatus(${emp.id})">
+                                    ${isBlocked ? '✅ تفعيل' : '⛔ إيقاف'}
                                 </button>
                             </div>
                         </div>
@@ -862,6 +863,11 @@ window.updateCustomerDebtSummaryBox = (custVal = null) => {
                 <span style="color:#fff;font-weight:900;">إجمالي الرصيد المتبقي على العميل:</span>
                 <strong style="color:var(--accent-red);font-weight:900;font-size:0.95rem;">${totalDebtAfterInvoice.toLocaleString('ar-EG')} ج.م</strong>
             </div>
+            ${previousDebt > 0 ? `
+                <button class="btn-primary" type="button" style="margin-top:0.35rem;padding:0.45rem;font-size:0.78rem;background:var(--accent-teal);border:none;width:100%;font-weight:800;" onclick="window.openPaymentModal(${customer.id})">
+                    💵 تسديد سند قبض مباشر للدين السابق (${previousDebt.toLocaleString('ar-EG')} ج.م)
+                </button>
+            ` : ''}
         </div>
     `;
 };

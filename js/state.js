@@ -311,13 +311,35 @@ class ERPState {
     }
 
     addCustomerPayment(customerId, amount) {
-        const customer = this.customers.find(c => c.id === customerId);
+        const customer = this.customers.find(c => String(c.id) === String(customerId));
         if (customer) {
-            const pay = Number(amount);
-            customer.paidAmount += pay;
-            customer.debt = Math.max(0, customer.debt - pay);
+            const pay = Number(amount) || 0;
+            if (pay <= 0) return;
+
+            customer.paidAmount = (Number(customer.paidAmount) || 0) + pay;
+            customer.debt = Math.max(0, (Number(customer.debt) || 0) - pay);
             customer.lastPaymentDate = new Date().toISOString().split('T')[0];
             this.save(STORAGE_KEYS.CUSTOMERS, this.customers);
+
+            // Update Cash Liquidity (Always add payment receipt cash to main cash liquidity)
+            const sellerUser = this.currentUser && this.users.find(u => u.id === this.currentUser.id);
+            const isDelegate = sellerUser && sellerUser.role !== 'مدير عام' && sellerUser.id !== 1;
+
+            if (isDelegate) {
+                sellerUser.delegateCashHand = (Number(sellerUser.delegateCashHand) || 0) + pay;
+                this.save(STORAGE_KEYS.USERS, this.users);
+            }
+            
+            // Instantly update main cash liquidity and DOM element
+            this.updateCashOnHand((Number(this.cashOnHand) || 0) + pay);
+
+            this.addNotification({
+                title: `💵 تسجيل سند قبض جديد (${customer.name})`,
+                message: `تم تسليم مبلغ ${pay.toLocaleString('ar-EG')} ج.م من العميل (${customer.name}) وتوريدها فورياً لرصيد السيولة النقدية.`,
+                type: 'info'
+            });
+
+            this.notify();
         }
     }
 
@@ -429,28 +451,25 @@ class ERPState {
         };
 
         // Deduct inventory stock & update employee quota soldQty
+        const sellerUserObj = this.users.find(u => u.id === seller.id);
+
         this.cart.forEach(cartItem => {
             const product = this.products.find(p => p.id === cartItem.productId);
             if (product) {
                 product.stockPacks = Math.max(0, product.stockPacks - cartItem.qty);
             }
-
-            // If seller is an employee with quotas, increment soldQty
-            const sellerUser = this.users.find(u => u.id === seller.id);
-            if (sellerUser && sellerUser.productQuotas && sellerUser.productQuotas !== 'all') {
-                if (!sellerUser.productQuotas[cartItem.productId]) {
-                    sellerUser.productQuotas[cartItem.productId] = { allocatedQty: 0, soldQty: 0 };
+            if (sellerUserObj && sellerUserObj.productQuotas && sellerUserObj.productQuotas !== 'all') {
+                if (!sellerUserObj.productQuotas[cartItem.productId]) {
+                    sellerUserObj.productQuotas[cartItem.productId] = { allocatedQty: 0, soldQty: 0 };
                 }
-                sellerUser.productQuotas[cartItem.productId].soldQty = (sellerUser.productQuotas[cartItem.productId].soldQty || 0) + cartItem.qty;
+                sellerUserObj.productQuotas[cartItem.productId].soldQty = (sellerUserObj.productQuotas[cartItem.productId].soldQty || 0) + cartItem.qty;
             }
         });
         this.save(STORAGE_KEYS.PRODUCTS, this.products);
 
-        // Update seller delegate cash holding if seller is employee/delegate
-        const sellerUser = this.users.find(u => u.id === seller.id);
-        const isDelegate = sellerUser && sellerUser.role !== 'مدير عام' && sellerUser.id !== 1;
+        const isDelegate = sellerUserObj && sellerUserObj.role !== 'مدير عام' && sellerUserObj.id !== 1;
         if (isDelegate) {
-            sellerUser.delegateCashHand = (Number(sellerUser.delegateCashHand) || 0) + paidAmount;
+            sellerUserObj.delegateCashHand = (Number(sellerUserObj.delegateCashHand) || 0) + paidAmount;
         } else {
             // Admin sales go directly to main cash liquidity
             this.cashOnHand += paidAmount;
@@ -467,10 +486,48 @@ class ERPState {
             }
         }
 
+        // Build detailed notification for delegate sales, item sell prices, and discounts
+        const itemSummaries = this.cart.map(item => {
+            const product = this.products.find(p => p.id === item.productId);
+            const catalogPrice = product ? (Number(product.sellPrice) || item.unitPrice) : item.unitPrice;
+            const diff = item.unitPrice - catalogPrice;
+            
+            let itemStr = `🔹 <b>${item.name}</b>: كمية (${item.qty} قروصة) بسعر <b>${item.unitPrice} ج.م</b>/قروصة`;
+            if (diff < 0) {
+                itemStr += ` <span style="color:#ef4444;font-weight:700;">(⚠️ خصم سعر: ${Math.abs(diff)} ج عن السعر الرسمي ${catalogPrice} ج)</span>`;
+            } else if (diff > 0) {
+                itemStr += ` <span style="color:#10b981;font-weight:700;">(↗️ زيادة سعر: +${diff} ج عن السعر الرسمي ${catalogPrice} ج)</span>`;
+            }
+            return itemStr;
+        }).join('<br>');
+
+        const discountText = discount > 0 
+            ? `<br>🏷️ <b>إجمالي الخصم الإضافي بالفاتورة:</b> <span style="color:#ef4444;font-weight:800;">${discount.toLocaleString('ar-EG')} ج.م</span>`
+            : '';
+
+        const debtText = remainingDebt > 0
+            ? `<br>⚠️ <b>المتبقي آجل (دين على العميل):</b> ${remainingDebt.toLocaleString('ar-EG')} ج.م (المحصل: ${paidAmount.toLocaleString('ar-EG')} ج.م)`
+            : `<br>✅ <b>الحالة:</b> تم تحصيل كامل الفاتورة نقداً (${paidAmount.toLocaleString('ar-EG')} ج.م)`;
+
+        const isDelegateSeller = (sellerUserObj && sellerUserObj.role !== 'مدير عام' && sellerUserObj.id !== 1) || (seller.role && seller.role !== 'مدير عام' && seller.id !== 1);
+        
+        const notifTitle = isDelegateSeller
+            ? `🛒 إشعار مبيعات وخصم للمندوب (${seller.name}) - ${invoiceNumber}`
+            : `🛒 عملية بيع جديدة (${invoiceNumber})`;
+
+        const notifMessage = `
+            👤 <b>البائع/المندوب:</b> ${seller.name}<br>
+            👥 <b>العميل:</b> ${newInvoice.customerName}<br>
+            💵 <b>إجمالي الفاتورة الصافي:</b> <b>${grandTotal.toLocaleString('ar-EG')} ج.م</b>${discountText}${debtText}<br>
+            <div style="margin-top:0.4rem;padding-top:0.4rem;border-top:1px dashed rgba(255,255,255,0.15);">
+                <b>📦 أسعار البيع والتفاصيل للأصناف:</b><br>${itemSummaries}
+            </div>
+        `.trim();
+
         // Add notification for ALL sales
         this.addNotification({
-            title: `🛒 عملية بيع جديدة (${invoiceNumber})`,
-            message: `تم إصدار الفاتورة بواسطة (${seller.name}) للعميل (${newInvoice.customerName}) بقيمة ${grandTotal} ج.م.`,
+            title: notifTitle,
+            message: notifMessage,
             type: 'sale'
         });
 
@@ -482,27 +539,28 @@ class ERPState {
         return newInvoice;
     }
 
-    /* Customer Management Methods */
-    addCustomer(customerData) {
-        const newCustomer = {
-            id: Date.now(),
-            name: customerData.name || '',
-            shopName: customerData.shopName || '',
-            phone: customerData.phone || '',
-            location: customerData.location || '',
-            debt: Number(customerData.debt) || 0,
-            totalPurchases: Number(customerData.totalPurchases) || 0,
-            paidAmount: Number(customerData.paidAmount) || 0
-        };
-        this.customers.push(newCustomer);
-        this.save(STORAGE_KEYS.CUSTOMERS, this.customers);
-        this.notify();
-        return newCustomer;
-    }
+
 
     updateCustomer(id, updatedFields) {
-        const index = this.customers.findIndex(c => c.id === id);
+        const index = this.customers.findIndex(c => String(c.id) === String(id));
         if (index !== -1) {
+            const oldCust = this.customers[index];
+            const oldDebt = Number(oldCust.debt) || 0;
+            const newDebt = updatedFields.debt !== undefined ? Number(updatedFields.debt) || 0 : oldDebt;
+
+            // If debt was manually decreased, sync reduced debt to liquidity
+            const debtReduction = oldDebt - newDebt;
+            if (debtReduction > 0) {
+                const sellerUser = this.currentUser && this.users.find(u => u.id === this.currentUser.id);
+                const isDelegate = sellerUser && sellerUser.role !== 'مدير عام' && sellerUser.id !== 1;
+                if (isDelegate) {
+                    sellerUser.delegateCashHand = (Number(sellerUser.delegateCashHand) || 0) + debtReduction;
+                    this.save(STORAGE_KEYS.USERS, this.users);
+                } else {
+                    this.updateCashOnHand((Number(this.cashOnHand) || 0) + debtReduction);
+                }
+            }
+
             this.customers[index] = { ...this.customers[index], ...updatedFields };
             this.save(STORAGE_KEYS.CUSTOMERS, this.customers);
             this.notify();
@@ -518,6 +576,26 @@ class ERPState {
     }
 
     /* Cash Liquidity Management */
+    getDelegatesTotalCash() {
+        return this.users.reduce((sum, u) => {
+            const isDelegate = u.role !== 'مدير عام' && u.id !== 1;
+            return sum + (isDelegate ? (Number(u.delegateCashHand) || 0) : 0);
+        }, 0);
+    }
+
+    getTotalLiquidity() {
+        return (Number(this.cashOnHand) || 0) + this.getDelegatesTotalCash();
+    }
+
+    getTotalCustomerDebts() {
+        return this.customers.reduce((sum, c) => sum + (Number(c.debt) || 0), 0);
+    }
+
+    getTotalBusinessCapital() {
+        const inventoryCost = this.products.reduce((sum, p) => sum + ((Number(p.buyPrice) || 0) * (Number(p.stockPacks) || 0)), 0);
+        return inventoryCost + this.getTotalLiquidity() + this.getTotalCustomerDebts();
+    }
+
     updateCashOnHand(newAmount) {
         const val = Number(newAmount) || 0;
         this.cashOnHand = val;
@@ -537,6 +615,7 @@ class ERPState {
         if (index === -1) return null;
 
         const inv = this.invoices[index];
+        const oldPaid = Number(inv.paidAmount) || 0;
 
         // Revert old debt if applicable
         if (inv.customerId && inv.remainingDebt > 0) {
@@ -575,9 +654,24 @@ class ERPState {
             }
         }
 
+        // Sync paid amount difference to cash liquidity
+        const paidDiff = newPaidAmount - oldPaid;
+        if (paidDiff !== 0) {
+            const sellerUser = this.users.find(u => u.id === inv.sellerId);
+            const isDelegate = sellerUser && sellerUser.role !== 'مدير عام' && sellerUser.id !== 1;
+            if (isDelegate) {
+                sellerUser.delegateCashHand = Math.max(0, (Number(sellerUser.delegateCashHand) || 0) + paidDiff);
+                this.save(STORAGE_KEYS.USERS, this.users);
+            } else {
+                this.cashOnHand = Math.max(0, (Number(this.cashOnHand) || 0) + paidDiff);
+                this.save(STORAGE_KEYS.CASH_ON_HAND, this.cashOnHand);
+            }
+        }
+
         this.invoices[index] = updatedInvoice;
         this.save(STORAGE_KEYS.CUSTOMERS, this.customers);
         this.save(STORAGE_KEYS.INVOICES, this.invoices);
+        this.notifyListeners();
         return updatedInvoice;
     }
 
@@ -592,6 +686,20 @@ class ERPState {
                 customer.debt = Math.max(0, customer.debt - inv.remainingDebt);
                 customer.totalPurchases = Math.max(0, customer.totalPurchases - inv.grandTotal);
                 this.save(STORAGE_KEYS.CUSTOMERS, this.customers);
+            }
+        }
+
+        // Refund paid amount from cash liquidity
+        const oldPaid = Number(inv.paidAmount) || 0;
+        if (oldPaid > 0) {
+            const sellerUser = this.users.find(u => u.id === inv.sellerId);
+            const isDelegate = sellerUser && sellerUser.role !== 'مدير عام' && sellerUser.id !== 1;
+            if (isDelegate) {
+                sellerUser.delegateCashHand = Math.max(0, (Number(sellerUser.delegateCashHand) || 0) - oldPaid);
+                this.save(STORAGE_KEYS.USERS, this.users);
+            } else {
+                this.cashOnHand = Math.max(0, (Number(this.cashOnHand) || 0) - oldPaid);
+                this.save(STORAGE_KEYS.CASH_ON_HAND, this.cashOnHand);
             }
         }
 

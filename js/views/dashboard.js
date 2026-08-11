@@ -2,15 +2,20 @@ import { state } from '../state.js';
 
 export function renderDashboardView() {
     const todayInvoices     = state.invoices;
-    const totalTodaySales   = todayInvoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
+    const totalTodaySales   = todayInvoices.reduce((sum, inv) => sum + (Number(inv.grandTotal) || 0), 0);
     const totalMonthlySales = totalTodaySales;
-    const totalMonthlyProfit = todayInvoices.reduce((sum, inv) => sum + (inv.netProfit || 0), 0);
+    const totalMonthlyProfit = todayInvoices.reduce((sum, inv) => sum + (Number(inv.netProfit) || 0), 0);
     const lowStockCount     = state.products.filter(p => p.stockPacks <= p.minStockPacks).length;
-    const totalCustomerDebts = state.customers.reduce((sum, c) => sum + c.debt, 0);
-    const totalInventoryCost  = state.products.reduce((sum, p) => sum + (p.buyPrice  * p.stockPacks), 0);
-    const totalInventoryValue = state.products.reduce((sum, p) => sum + (p.sellPrice * p.stockPacks), 0);
+    const totalCustomerDebts = state.getTotalCustomerDebts();
+    const totalInventoryCost  = state.products.reduce((sum, p) => sum + ((Number(p.buyPrice) || 0) * (Number(p.stockPacks) || 0)), 0);
+    const totalInventoryValue = state.products.reduce((sum, p) => sum + ((Number(p.sellPrice) || 0) * (Number(p.stockPacks) || 0)), 0);
     const totalInventoryProfit = totalInventoryValue - totalInventoryCost;
-    const availableCash     = 60;
+    
+    const mainCashOnHand     = Number(state.cashOnHand) || 0;
+    const delegatesCashHand  = state.getDelegatesTotalCash();
+    const totalLiquidity     = state.getTotalLiquidity();
+    const totalBusinessCapital = state.getTotalBusinessCapital();
+
     const currentDateStr    = new Date().toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
     return `
@@ -99,28 +104,32 @@ export function renderDashboardView() {
                 <div>
                     <div style="display:flex;align-items:center;gap:0.5rem;font-weight:800;font-size:1rem;flex-wrap:wrap;">
                         <span>🪙 رأس مال البضاعة والسيولة المالية الشاملة</span>
-                        <span class="badge badge-teal">مربوط حياً بالمخزن</span>
+                        <span class="badge badge-teal">مربوط حياً بالمخزن والمناديب</span>
                     </div>
-                    <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">تقييم لحظي لرأس مال البضاعة بالمخزن، الديون لدى العملاء، والسيولة النقدية.</div>
+                    <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">تقييم لحظي شامل لرأس مال التجارة (بضاعة المخزن + الخزينة + عُهد المناديب + ديون السوق).</div>
                 </div>
-                <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
-                    <div style="text-align:center;background:#0f1524;padding:0.5rem 0.85rem;border-radius:10px;border:1px solid var(--border-color);">
-                        <div style="font-size:0.7rem;color:var(--text-muted);">رأس المال (تكلفة)</div>
-                        <div style="font-size:1rem;font-weight:800;color:var(--primary-orange);">${totalInventoryCost.toLocaleString('ar-EG')} ج.م</div>
+                <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+                    <div style="text-align:center;background:#0f1524;padding:0.5rem 0.75rem;border-radius:10px;border:1px solid var(--accent-purple);" title="إجمالي قيمة رأس مال التجارة بالكامل">
+                        <div style="font-size:0.68rem;color:var(--text-muted);font-weight:700;">رأس المال الشامل 👑</div>
+                        <div style="font-size:0.95rem;font-weight:900;color:var(--accent-purple);">${totalBusinessCapital.toLocaleString('ar-EG')} ج.م</div>
                     </div>
-                    <div style="text-align:center;background:#0f1524;padding:0.5rem 0.85rem;border-radius:10px;border:1px solid var(--border-color);">
-                        <div style="font-size:0.7rem;color:var(--text-muted);">قيمة البيع</div>
-                        <div style="font-size:1rem;font-weight:800;color:#60a5fa;">${totalInventoryValue.toLocaleString('ar-EG')} ج.م</div>
+                    <div style="text-align:center;background:#0f1524;padding:0.5rem 0.75rem;border-radius:10px;border:1px solid var(--border-color);">
+                        <div style="font-size:0.68rem;color:var(--text-muted);">رأس المال (تكلفة)</div>
+                        <div style="font-size:0.95rem;font-weight:800;color:var(--primary-orange);">${totalInventoryCost.toLocaleString('ar-EG')} ج.م</div>
                     </div>
-                    <div style="text-align:center;background:#0f1524;padding:0.5rem 0.85rem;border-radius:10px;border:1px solid rgba(15,211,160,0.3);">
-                        <div style="font-size:0.7rem;color:var(--text-muted);">الأرباح المحتبسة</div>
-                        <div style="font-size:1rem;font-weight:800;color:${totalInventoryProfit >= 0 ? 'var(--accent-teal)' : 'var(--accent-red)'};">
+                    <div style="text-align:center;background:#0f1524;padding:0.5rem 0.75rem;border-radius:10px;border:1px solid var(--border-color);">
+                        <div style="font-size:0.68rem;color:var(--text-muted);">قيمة البيع</div>
+                        <div style="font-size:0.95rem;font-weight:800;color:#60a5fa;">${totalInventoryValue.toLocaleString('ar-EG')} ج.م</div>
+                    </div>
+                    <div style="text-align:center;background:#0f1524;padding:0.5rem 0.75rem;border-radius:10px;border:1px solid rgba(15,211,160,0.3);">
+                        <div style="font-size:0.68rem;color:var(--text-muted);">الأرباح المحتبسة</div>
+                        <div style="font-size:0.95rem;font-weight:800;color:${totalInventoryProfit >= 0 ? 'var(--accent-teal)' : 'var(--accent-red)'};">
                             ${totalInventoryProfit >= 0 ? '+' : ''}${totalInventoryProfit.toLocaleString('ar-EG')} ج.م
                         </div>
                     </div>
-                    <div style="text-align:center;background:#0f1524;padding:0.5rem 0.85rem;border-radius:10px;border:1px solid var(--primary-orange);cursor:pointer;" onclick="window.openEditCashLiquidityModal()" title="اضغط لتعديل السيولة النقدية يدوياً ✏️">
-                        <div style="font-size:0.7rem;color:var(--primary-orange);font-weight:700;">السيولة النقدية الحالية ✏️</div>
-                        <div style="font-size:1rem;font-weight:900;color:var(--accent-teal);" id="dashboard-cash-liquidity-val">${(state.cashOnHand || 60).toLocaleString('ar-EG')} ج.م</div>
+                    <div style="text-align:center;background:#0f1524;padding:0.5rem 0.75rem;border-radius:10px;border:1px solid var(--primary-orange);cursor:pointer;" onclick="window.openEditCashLiquidityModal()" title="اضغط لتعديل السيولة النقدية يدوياً ✏️">
+                        <div style="font-size:0.68rem;color:var(--primary-orange);font-weight:700;">السيولة النقدية الحالية ✏️</div>
+                        <div style="font-size:0.95rem;font-weight:900;color:var(--accent-teal);" id="dashboard-cash-liquidity-val">${mainCashOnHand.toLocaleString('ar-EG')} ج.م</div>
                     </div>
                 </div>
             </div>
