@@ -705,20 +705,24 @@ export function openRestockModal(preselectedId = null) {
             border-radius:12px;
             padding:0.85rem 1rem;
             display:grid;
-            grid-template-columns:1fr 1fr 1fr;
-            gap:0.75rem;
+            grid-template-columns:1fr 1fr 1fr 1fr;
+            gap:0.5rem;
         ">
             <div style="text-align:center;">
-                <div style="font-size:0.7rem;color:var(--text-muted);font-weight:700;margin-bottom:0.2rem;">الكمية الإجمالية بعد الوارد</div>
+                <div style="font-size:0.7rem;color:var(--text-muted);font-weight:700;margin-bottom:0.2rem;">الكمية بعد الوارد</div>
                 <div id="rs-preview-qty" style="font-size:1.1rem;font-weight:900;color:var(--accent-teal);">−</div>
             </div>
             <div style="text-align:center;border-right:1px solid rgba(255,255,255,0.07);border-left:1px solid rgba(255,255,255,0.07);">
-                <div style="font-size:0.7rem;color:var(--text-muted);font-weight:700;margin-bottom:0.2rem;">متوسط تكلفة الشراء (WAC)</div>
+                <div style="font-size:0.7rem;color:var(--text-muted);font-weight:700;margin-bottom:0.2rem;">متوسط التكلفة (WAC)</div>
                 <div id="rs-preview-wac" style="font-size:1.1rem;font-weight:900;color:var(--primary-orange);">−</div>
             </div>
-            <div style="text-align:center;">
+            <div style="text-align:center;border-left:1px solid rgba(255,255,255,0.07);">
                 <div style="font-size:0.7rem;color:var(--text-muted);font-weight:700;margin-bottom:0.2rem;">هامش الربح المتوقع</div>
                 <div id="rs-preview-margin" style="font-size:1.1rem;font-weight:900;color:#60a5fa;">−</div>
+            </div>
+            <div style="text-align:center;">
+                <div style="font-size:0.7rem;color:var(--text-muted);font-weight:700;margin-bottom:0.2rem;">خصم الخزينة</div>
+                <div id="rs-preview-cash-deduct" style="font-size:1.05rem;font-weight:900;color:#ef4444;">0 ج.م</div>
             </div>
         </div>
     `;
@@ -750,10 +754,11 @@ export function openRestockModal(preselectedId = null) {
             console.info(
                 `✅ تم التوريد: ${updated.name} | الكمية: ${updated.stockPacks} | WAC: ${updated.buyPrice} ج.م | هامش: ${marginPct}%`
             );
+            window.renderCurrentView();
             return true;
         }
         return false;
-    }, '✅ حفظ وتطبيق التوريد');
+    }, '✅ حفظ وتطبيق التوريد وتحديث الخزينة');
 }
 export { openRestockModal as openQuickPriceModal };
 window.openQuickPriceModal = openRestockModal;
@@ -790,13 +795,16 @@ window.rsUpdateWACPreview = () => {
     const wacRounded  = Math.round(wac * 100) / 100;
     const marginPct   = wacRounded > 0 ? (((newSell - wacRounded) / wacRounded) * 100).toFixed(1) : '0.0';
     const marginColor = Number(marginPct) > 0 ? 'var(--accent-teal)' : 'var(--accent-red)';
+    const purchaseCost = addQty * addBuy;
 
     const qEl = document.getElementById('rs-preview-qty');
     const wEl = document.getElementById('rs-preview-wac');
     const mEl = document.getElementById('rs-preview-margin');
+    const cEl = document.getElementById('rs-preview-cash-deduct');
     if (qEl) qEl.textContent = totalQty > 0 ? `${totalQty} قروصة` : '−';
     if (wEl) wEl.textContent = totalQty > 0 ? `${wacRounded} ج.م` : '−';
     if (mEl) { mEl.textContent = totalQty > 0 ? `${marginPct}%` : '−'; mEl.style.color = marginColor; }
+    if (cEl) cEl.textContent = purchaseCost > 0 ? `-${purchaseCost.toLocaleString('ar-EG')} ج.م` : '0 ج.م';
 };
 
 /* Keep openEditProductModal for row-level edit (now delegates to openRestockModal) */
@@ -811,7 +819,9 @@ window.openCartItemDiscountPopup = (productId) => {
     const item = state.cart.find(i => i.productId === productId);
     if (!item) return;
 
-    const currentDiscount = item.itemDiscount || 0;
+    const productObj = state.products.find(p => p.id === productId);
+    const buyPrice = productObj ? (Number(productObj.buyPrice) || 0) : (Number(item.buyPrice) || 0);
+
     const root = document.getElementById('modal-root');
     root.innerHTML = `
         <div class="modal-backdrop active" id="current-modal-backdrop">
@@ -824,7 +834,7 @@ window.openCartItemDiscountPopup = (productId) => {
                     <div style="background: #0f1524; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <div style="font-weight: 800; color: #fff;">${item.name}</div>
-                            <div style="font-size: 0.8rem; color: var(--text-muted);">${item.qty} قروصة × ${item.unitPrice} ج.م</div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">${item.qty} قروصة × ${item.unitPrice} ج.م (سعر الشراء: ${buyPrice} ج)</div>
                         </div>
                         <div style="text-align: left;">
                             <div style="font-size: 1.1rem; font-weight: 900; color: var(--primary-orange);">${item.unitPrice * item.qty} ج.م</div>
@@ -839,6 +849,10 @@ window.openCartItemDiscountPopup = (productId) => {
                             value="${currentDiscount}" min="0" max="${item.unitPrice * item.qty}"
                             style="font-size: 1.1rem; font-weight: 800; text-align: center;"
                             placeholder="0">
+                    </div>
+
+                    <div id="item-discount-warning" style="display:none; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #ef4444; border-radius: 8px; padding: 0.5rem 0.75rem; margin-top: 0.5rem; font-size: 0.8rem; font-weight: 800;">
+                        ⚠️ تحذير: سعر البيع بعد الخصم سيكون أقل من سعر الشراء (${buyPrice} ج.م) - سيتم إطلاق تنبيه خسارة!
                     </div>
 
                     <div id="item-discount-preview" style="background: rgba(15,211,160,0.08); border: 1px solid rgba(15,211,160,0.25); border-radius: 10px; padding: 0.75rem; margin-top: 0.5rem; display: flex; justify-content: space-between; font-size: 0.88rem;">
@@ -858,7 +872,14 @@ window.openCartItemDiscountPopup = (productId) => {
     document.getElementById('item-discount-input').addEventListener('input', (e) => {
         const total = item.unitPrice * item.qty;
         const disc = Math.min(Number(e.target.value) || 0, total);
-        document.getElementById('item-discounted-total').textContent = `${total - disc} ج.م`;
+        const newTotal = total - disc;
+        const effUnitPrice = item.qty > 0 ? (newTotal / item.qty) : newTotal;
+        document.getElementById('item-discounted-total').textContent = `${newTotal} ج.م`;
+        
+        const warnEl = document.getElementById('item-discount-warning');
+        if (warnEl) {
+            warnEl.style.display = (buyPrice > 0 && effUnitPrice < buyPrice) ? 'block' : 'none';
+        }
     });
 };
 

@@ -211,6 +211,18 @@ class ERPState {
         this.notify();
     }
 
+    deleteNotification(id) {
+        this.notifications = this.notifications.filter(n => String(n.id) !== String(id));
+        this.save(STORAGE_KEYS.NOTIFICATIONS, this.notifications);
+        this.notify();
+    }
+
+    clearAllNotifications() {
+        this.notifications = [];
+        this.save(STORAGE_KEYS.NOTIFICATIONS, this.notifications);
+        this.notify();
+    }
+
     /* Products CRUD */
     addProduct(product) {
         const newProduct = {
@@ -227,9 +239,17 @@ class ERPState {
         };
         this.products.unshift(newProduct);
         this.save(STORAGE_KEYS.PRODUCTS, this.products);
+
+        // Deduct initial stock purchase cost from cash liquidity if applicable
+        const initialCost = newProduct.stockPacks * newProduct.buyPrice;
+        if (initialCost > 0) {
+            this.updateCashOnHand(Math.max(0, (Number(this.cashOnHand) || 0) - initialCost));
+        }
+
         this.addNotification({
             title: `➕ إضافة صنف جديد: ${newProduct.name}`,
-            message: `تم إضافة الصنف (${newProduct.name}) بسعر شراء ${newProduct.buyPrice} ج.م وسعر بيع ${newProduct.sellPrice} ج.م.`,
+            message: `تم إضافة الصنف (${newProduct.name}) بسعر شراء ${newProduct.buyPrice} ج.م وسعر بيع ${newProduct.sellPrice} ج.م.` +
+                     (initialCost > 0 ? `<br>💸 <b>تم خصم تكلفة مخزون أول المشتريات:</b> ${initialCost.toLocaleString('ar-EG')} ج.م من السيولة النقدية.` : ''),
             type: 'info'
         });
         this.checkStockThresholds();
@@ -273,6 +293,8 @@ class ERPState {
             ? Number(newMinStock)
             : p.minStockPacks;
 
+        const totalPurchaseCost = addedQty * addedBuy;
+
         this.products[index] = {
             ...p,
             stockPacks:    totalQty,
@@ -283,6 +305,17 @@ class ERPState {
         };
 
         this.save(STORAGE_KEYS.PRODUCTS, this.products);
+
+        // Deduct purchase amount directly from main cash liquidity
+        if (totalPurchaseCost > 0) {
+            this.updateCashOnHand(Math.max(0, (Number(this.cashOnHand) || 0) - totalPurchaseCost));
+            this.addNotification({
+                title: `📦 توريد مشتريات بضاعة جديدة: ${p.name}`,
+                message: `تم توريد (${addedQty.toLocaleString('ar-EG')}) قروصة بسعر شراء (${addedBuy.toLocaleString('ar-EG')} ج.م) للصنف (${p.name}).<br>💸 <b>إجمالي تكلفة المشتريات المخصومة من الخزينة:</b> <span style="color:#ef4444;font-weight:900;">${totalPurchaseCost.toLocaleString('ar-EG')} ج.م</span>.`,
+                type: 'info'
+            });
+        }
+
         this.checkStockThresholds();
         return this.products[index];
     }
@@ -487,13 +520,28 @@ class ERPState {
         }
 
         // Build detailed notification for delegate sales, item sell prices, and discounts
+        const lossItems = [];
         const itemSummaries = this.cart.map(item => {
             const product = this.products.find(p => p.id === item.productId);
             const catalogPrice = product ? (Number(product.sellPrice) || item.unitPrice) : item.unitPrice;
+            const buyCost = product ? (Number(product.buyPrice) || Number(item.buyPrice) || 0) : (Number(item.buyPrice) || 0);
             const diff = item.unitPrice - catalogPrice;
-            
-            let itemStr = `🔹 <b>${item.name}</b>: كمية (${item.qty} قروصة) بسعر <b>${item.unitPrice} ج.م</b>/قروصة`;
-            if (diff < 0) {
+            const isBelowBuyCost = item.unitPrice < buyCost;
+
+            if (isBelowBuyCost) {
+                lossItems.push({
+                    name: item.name,
+                    unitPrice: item.unitPrice,
+                    buyPrice: buyCost,
+                    qty: item.qty,
+                    lossAmount: (buyCost - item.unitPrice) * item.qty
+                });
+            }
+
+            let itemStr = `🔹 <b>${item.name}</b>: كمية (${item.qty} قروصة) بسعر <b>${item.unitPrice} ج.م</b>/قروصة (سعر الشراء: ${buyCost} ج.م)`;
+            if (isBelowBuyCost) {
+                itemStr += ` <span style="color:#ef4444;font-weight:900;">(⚠️ تحذير: بيع بأقل من سعر الشراء لخسارة ${(buyCost - item.unitPrice) * item.qty} ج!)</span>`;
+            } else if (diff < 0) {
                 itemStr += ` <span style="color:#ef4444;font-weight:700;">(⚠️ خصم سعر: ${Math.abs(diff)} ج عن السعر الرسمي ${catalogPrice} ج)</span>`;
             } else if (diff > 0) {
                 itemStr += ` <span style="color:#10b981;font-weight:700;">(↗️ زيادة سعر: +${diff} ج عن السعر الرسمي ${catalogPrice} ج)</span>`;
@@ -502,7 +550,7 @@ class ERPState {
         }).join('<br>');
 
         const discountText = discount > 0 
-            ? `<br>🏷️ <b>إجمالي الخصم الإضافي بالفاتورة:</b> <span style="color:#ef4444;font-weight:800;">${discount.toLocaleString('ar-EG')} ج.م</span>`
+            ? `<br>🏷️ <b>إجمالي الخصم الإضافي بالفاتورة:</b> <span style="color:#ef4444;font-weight:800;">${discount.toLocaleString('ar-EG')} ج.م</span>` + (discount > 50 ? ' <span style="color:#ef4444;font-weight:900;">(🚨 يتجاوز حد 50 ج)</span>' : '')
             : '';
 
         const debtText = remainingDebt > 0
@@ -530,6 +578,30 @@ class ERPState {
             message: notifMessage,
             type: 'sale'
         });
+
+        // 1. High-priority Warning Notification if ANY item was sold below cost price (سعر البيع أقل من سعر الشراء)
+        if (lossItems.length > 0) {
+            const lossDetailsHtml = lossItems.map(li => 
+                `• <b>${li.name}</b>: تم البيع بسعر <b>${li.unitPrice} ج.م</b> (سعر التكلفة: <b>${li.buyPrice} ج.م</b>) | الخسارة بالصنف: <span style="color:#ef4444;font-weight:900;">${li.lossAmount.toLocaleString('ar-EG')} ج.م</span>`
+            ).join('<br>');
+
+            const totalLossSum = lossItems.reduce((s, i) => s + i.lossAmount, 0);
+
+            this.addNotification({
+                title: `⚠️ تنبيه حرج: بيع بأقل من سعر الشراء (${invoiceNumber})`,
+                message: `تم رصد بيع أصناف بسعر أقل من سعر الشراء للعميل (<b>${newInvoice.customerName}</b>) بواسطة (<b>${seller.name}</b>):<br>${lossDetailsHtml}<br>💥 <b>إجمالي خسارة الفاتورة:</b> <span style="color:#ef4444;font-weight:900;font-size:1.05rem;">${totalLossSum.toLocaleString('ar-EG')} ج.م</span>`,
+                type: 'warning'
+            });
+        }
+
+        // 2. Special Warning Notification if invoice discount exceeds 50 EGP (خصم أزيد من 50 جنيه)
+        if (discount > 50) {
+            this.addNotification({
+                title: `🚨 تنبيه: خصم مرتفع بالفاتورة (${invoiceNumber}) - تجاوز 50 ج.م`,
+                message: `تم تطبيق خصم مرتفع بمبلغ <b style="color:#ef4444;font-size:1.05rem;">${discount.toLocaleString('ar-EG')} ج.م</b> على الفاتورة (<b>${invoiceNumber}</b>) للعميل (<b>${newInvoice.customerName}</b>) بواسطة البائع (<b>${seller.name}</b>). الإجمالي بعد الخصم: <b>${grandTotal.toLocaleString('ar-EG')} ج.م</b>.`,
+                type: 'warning'
+            });
+        }
 
         this.invoices.unshift(newInvoice);
         this.save(STORAGE_KEYS.INVOICES, this.invoices);

@@ -10,10 +10,17 @@ function getCartPaidDefault(subtotal) {
 }
 
 function renderCartItemHtml(item) {
+    const product = state.products.find(p => p.id === item.productId);
+    const buyPrice = product ? (Number(product.buyPrice) || 0) : (Number(item.buyPrice) || 0);
+    const isBelowBuy = buyPrice > 0 && item.unitPrice < buyPrice;
+
     return `
-        <div class="cart-item-card">
+        <div class="cart-item-card" style="${isBelowBuy ? 'border: 1px solid rgba(239,68,68,0.5); background: rgba(239,68,68,0.06);' : ''}">
             <div class="cart-item-info">
-                <div class="cart-item-title">${item.name}</div>
+                <div class="cart-item-title">
+                    ${item.name}
+                    ${isBelowBuy ? `<span style="background:rgba(239,68,68,0.25);color:#ef4444;border-radius:4px;padding:0.1rem 0.35rem;font-size:0.7rem;font-weight:900;margin-right:0.3rem;">⚠️ أقل من سعر الشراء (${buyPrice} ج)</span>` : ''}
+                </div>
                 <div class="cart-item-price-sub" onclick="window.openCartItemDiscountPopup(${item.productId})" title="اضغط لتعديل سعر الصنف بهذه الفاتورة">${item.unitPrice} ج.م / قروصة ✏️</div>
             </div>
             <div class="cart-item-controls">
@@ -65,6 +72,10 @@ function renderCartSummaryHtml(subtotal) {
                     min="0"
                     oninput="window.posRecalculateTotals()"
                 >
+            </div>
+
+            <div id="pos-discount-high-alert" style="display:${discount > 50 ? 'block' : 'none'};background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:6px;padding:0.4rem 0.6rem;font-size:0.75rem;font-weight:800;margin:-0.25rem 0 0.5rem 0;text-align:center;">
+                🚨 تنبيه: الخصم يتجاوز 50 جنيه (سيتم إرسال إشعار خاص عند الحفظ)!
             </div>
 
             <div class="cart-summary-row">
@@ -790,10 +801,13 @@ window.posRecalculateTotals = () => {
     const el2 = document.getElementById('pos-grand-total-val');
     const elPaid = document.getElementById('pos-paid-input');
     const mobileTotal = document.querySelector('.mobile-cart-bar-total');
+    const highDiscountAlert = document.getElementById('pos-discount-high-alert');
 
     if (el1) el1.innerText = `${subtotal} ج.م`;
     if (el2) el2.innerText = `${grandTotal} ج.م`;
     if (mobileTotal) mobileTotal.innerText = `${subtotal} ج.م`;
+    if (highDiscountAlert) highDiscountAlert.style.display = (discount > 50) ? 'block' : 'none';
+
     if (elPaid && !elPaid._userEdited && !state.currentPOSPaidManual) {
         elPaid.value = grandTotal;
         state.currentPOSPaid = grandTotal;
