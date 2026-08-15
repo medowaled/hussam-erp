@@ -94,6 +94,7 @@ class ERPState {
         this.cart = this.load(STORAGE_KEYS.CART, []);
         this.cashOnHand = this.load(STORAGE_KEYS.CASH_ON_HAND, 60);
         this.activeView = 'dashboard';
+        this.currentPOSCustomerId = '';
         this.listeners = [];
 
         this.checkStockThresholds();
@@ -873,6 +874,33 @@ class ERPState {
             this.users[index].status = this.users[index].status === 'disabled' ? 'active' : 'disabled';
             this.save(STORAGE_KEYS.USERS, this.users);
         }
+    }
+
+    deleteUser(id) {
+        const index = this.users.findIndex(u => u.id === id);
+        if (index === -1) return false;
+
+        const targetUser = this.users[index];
+        if (targetUser.id === 1 || (targetUser.role === 'مدير عام' && targetUser.username === 'hossam')) {
+            alert('لا يمكن حذف حساب المدير العام الرئيسي للنظام!');
+            return false;
+        }
+
+        if (this.currentUser && this.currentUser.id === id) {
+            alert('لا يمكنك حذف الحساب المسجل به حالياً! يرجى تسجيل الدخول بحساب مدير عام آخر أولاً.');
+            return false;
+        }
+
+        this.users.splice(index, 1);
+        this.save(STORAGE_KEYS.USERS, this.users);
+
+        this.addNotification({
+            title: 'حذف حساب موظف',
+            message: `تم حذف حساب المستخدم (${targetUser.name}) نهائياً من النظام.`,
+            type: 'warning'
+        });
+
+        return true;
     }
 
     /* Employee Quotas & Customer Assignment */

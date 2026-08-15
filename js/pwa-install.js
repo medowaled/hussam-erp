@@ -15,7 +15,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
     console.log('PWA beforeinstallprompt triggered!');
-    
+
     // Show automatic custom Arabic PWA install banner
     showPwaInstallBanner();
 });

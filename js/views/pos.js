@@ -9,6 +9,56 @@ function getCartPaidDefault(subtotal) {
     return state.currentPOSPaid !== undefined ? state.currentPOSPaid : subtotal;
 }
 
+function renderCustomerDebtBoxHtml(customerId, subtotal) {
+    if (!customerId) return '';
+    const customer = state.customers.find(c => String(c.id) === String(customerId));
+    if (!customer) return '';
+
+    const discount = Number(state.currentPOSDiscount || 0);
+    const currentInvoiceTotal = Math.max(0, subtotal - discount);
+    const paidDefault = getCartPaidDefault(currentInvoiceTotal);
+    const paidAmount = Number(state.currentPOSPaid !== undefined ? state.currentPOSPaid : paidDefault);
+
+    const previousDebt = Number(customer.debt) || 0;
+    const totalDebtBeforePayment = previousDebt + currentInvoiceTotal;
+    const newInvoiceRemaining = Math.max(0, currentInvoiceTotal - paidAmount);
+    const totalDebtAfterInvoice = previousDebt + newInvoiceRemaining;
+
+    return `
+        <div style="background:#090e1a;border:1px solid rgba(255,159,26,0.3);border-radius:10px;padding:0.75rem;font-size:0.8rem;display:flex;flex-direction:column;gap:0.4rem;">
+            <div class="flex-between">
+                <span style="color:var(--text-muted);">المديونية السابقة للعميل:</span>
+                <strong style="color:var(--accent-red);font-weight:900;">${previousDebt.toLocaleString('ar-EG')} ج.م</strong>
+            </div>
+            <div class="flex-between">
+                <span style="color:var(--text-muted);">إجمالي الفاتورة الجديدة:</span>
+                <strong style="color:#60a5fa;font-weight:900;">${currentInvoiceTotal.toLocaleString('ar-EG')} ج.م</strong>
+            </div>
+            <div class="flex-between" style="border-top:1px dashed var(--border-color);padding-top:0.3rem;">
+                <span style="color:#fff;font-weight:800;">إجمالي الدين القديم + الجديد:</span>
+                <strong style="color:var(--accent-purple);font-weight:900;">${totalDebtBeforePayment.toLocaleString('ar-EG')} ج.م</strong>
+            </div>
+            <div class="flex-between">
+                <span style="color:var(--text-muted);">الدفعة المحصلة الآن:</span>
+                <strong style="color:var(--accent-teal);font-weight:900;">${paidAmount.toLocaleString('ar-EG')} ج.م</strong>
+            </div>
+            <div class="flex-between">
+                <span style="color:var(--text-muted);">المتبقي من الفاتورة الجديدة:</span>
+                <strong style="color:var(--primary-orange);font-weight:900;">${newInvoiceRemaining.toLocaleString('ar-EG')} ج.م</strong>
+            </div>
+            <div class="flex-between" style="background:rgba(239,68,68,0.12);padding:0.4rem 0.6rem;border-radius:6px;border:1px solid rgba(239,68,68,0.3);margin-top:0.2rem;">
+                <span style="color:#fff;font-weight:900;">إجمالي الرصيد المتبقي على العميل:</span>
+                <strong style="color:var(--accent-red);font-weight:900;font-size:0.95rem;">${totalDebtAfterInvoice.toLocaleString('ar-EG')} ج.م</strong>
+            </div>
+            ${previousDebt > 0 ? `
+                <button class="btn-primary" type="button" style="margin-top:0.35rem;padding:0.45rem;font-size:0.78rem;background:var(--accent-teal);border:none;width:100%;font-weight:800;" onclick="window.openPaymentModal(${customer.id})">
+                    💵 تسديد سند قبض مباشر للدين السابق (${previousDebt.toLocaleString('ar-EG')} ج.م)
+                </button>
+            ` : ''}
+        </div>
+    `;
+}
+
 function renderCartItemHtml(item) {
     const product = state.products.find(p => p.id === item.productId);
     const buyPrice = product ? (Number(product.buyPrice) || 0) : (Number(item.buyPrice) || 0);
@@ -151,6 +201,7 @@ export function renderPosView() {
 function renderMainPosView(user) {
     const nonAdminEmployees = state.users.filter(u => u.id !== 1 && u.role !== 'مدير عام');
     const availableCustomers = state.customers;
+    const selectedCustomerId = state.currentPOSCustomerId || '';
 
     const products = state.products.filter(p => {
         const matchesCategory = activeCategory === 'الكل' || p.category === activeCategory;
@@ -271,12 +322,14 @@ function renderMainPosView(user) {
                 <div style="margin-bottom:0.85rem;">
                     <label class="form-label" style="font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">اختر العميل المشتري *</label>
                     <select class="form-control" id="pos-customer-select" style="font-size:0.82rem;" onchange="window.posOnCustomerSelectChange(this.value)">
-                        <option value="">-- بيع مباشر لعميل كاش نقدي --</option>
+                        <option value="" ${!selectedCustomerId ? 'selected' : ''}>-- بيع مباشر لعميل كاش نقدي --</option>
                         ${availableCustomers.map(c => `
-                            <option value="${c.id}">${c.name} (${c.shopName || 'تاجر'}) - مدين سابقاً: ${c.debt} ج.م</option>
+                            <option value="${c.id}" ${String(c.id) === String(selectedCustomerId) ? 'selected' : ''}>${c.name} (${c.shopName || 'تاجر'}) - مدين سابقاً: ${c.debt} ج.م</option>
                         `).join('')}
                     </select>
-                    <div id="pos-customer-debt-box" style="margin-top:0.6rem;"></div>
+                    <div id="pos-customer-debt-box" style="margin-top:0.6rem;">
+                        ${renderCustomerDebtBoxHtml(selectedCustomerId, subtotal)}
+                    </div>
                 </div>
 
                 <!-- Cart Items -->
@@ -477,6 +530,8 @@ function renderDedicatedEmployeePosView(empId, isEnteredByAdmin = false) {
 
     const categories = ['الكل', 'كليوباترا ومحلي', 'مارلبورو وأجنبي', 'فيب وإكسسوارات'];
 
+    const selectedCustomerId = state.currentPOSCustomerId || '';
+
     return `
         <!-- Dedicated Employee POS Header (Screenshot 3) -->
         <div class="pos-header-bar flex-between" style="flex-wrap:wrap;gap:0.75rem;">
@@ -605,12 +660,14 @@ function renderDedicatedEmployeePosView(empId, isEnteredByAdmin = false) {
                 <div style="margin-bottom:0.85rem;">
                     <label class="form-label" style="font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">اختر العميل المشتري *</label>
                     <select class="form-control" id="pos-customer-select" style="font-size:0.82rem;" onchange="window.posOnCustomerSelectChange(this.value)">
-                        <option value="">-- بيع مباشر لعميل كاش نقدي --</option>
+                        <option value="" ${!selectedCustomerId ? 'selected' : ''}>-- بيع مباشر لعميل كاش نقدي --</option>
                         ${availableCustomers.map(c => `
-                            <option value="${c.id}">${c.name} (${c.shopName || 'تاجر'}) - مدين سابقاً: ${c.debt} ج.م</option>
+                            <option value="${c.id}" ${String(c.id) === String(selectedCustomerId) ? 'selected' : ''}>${c.name} (${c.shopName || 'تاجر'}) - مدين سابقاً: ${c.debt} ج.م</option>
                         `).join('')}
                     </select>
-                    <div id="pos-customer-debt-box" style="margin-top:0.6rem;"></div>
+                    <div id="pos-customer-debt-box" style="margin-top:0.6rem;">
+                        ${renderCustomerDebtBoxHtml(selectedCustomerId, subtotal)}
+                    </div>
                 </div>
 
                 <!-- Cart Items -->
@@ -766,6 +823,7 @@ window.posClearCart = () => {
     state.currentPOSPaid = undefined;
     state.currentPOSPaidManual = false;
     state.currentPOSDiscount = 0;
+    state.currentPOSCustomerId = '';
     window.renderCurrentView();
 };
 
@@ -817,6 +875,7 @@ window.posRecalculateTotals = () => {
 };
 
 window.posOnCustomerSelectChange = (customerId) => {
+    state.currentPOSCustomerId = customerId || '';
     window.updateCustomerDebtSummaryBox(customerId);
 };
 
@@ -825,65 +884,12 @@ window.updateCustomerDebtSummaryBox = (custVal = null) => {
     if (!box) return;
 
     const select = document.getElementById('pos-customer-select');
-    const customerId = custVal !== null ? custVal : (select ? select.value : '');
-
-    if (!customerId) {
-        box.innerHTML = '';
-        return;
-    }
-
-    const customer = state.customers.find(c => c.id == customerId);
-    if (!customer) {
-        box.innerHTML = '';
-        return;
-    }
+    const customerId = custVal !== null ? custVal : (select ? select.value : (state.currentPOSCustomerId || ''));
+    state.currentPOSCustomerId = customerId || '';
 
     const cartItems = state.cart;
     const subtotal = cartItems.reduce((sum, item) => sum + (item.unitPrice * item.qty), 0);
-    const discount = Number(document.getElementById('pos-discount-input')?.value || 0);
-    const currentInvoiceTotal = Math.max(0, subtotal - discount);
-
-    const paidInput = document.getElementById('pos-paid-input');
-    const paidAmount = Number(paidInput ? paidInput.value : currentInvoiceTotal);
-
-    const previousDebt = Number(customer.debt) || 0;
-    const totalDebtBeforePayment = previousDebt + currentInvoiceTotal;
-    const newInvoiceRemaining = Math.max(0, currentInvoiceTotal - paidAmount);
-    const totalDebtAfterInvoice = previousDebt + newInvoiceRemaining;
-
-    box.innerHTML = `
-        <div style="background:#090e1a;border:1px solid rgba(255,159,26,0.3);border-radius:10px;padding:0.75rem;font-size:0.8rem;display:flex;flex-direction:column;gap:0.4rem;">
-            <div class="flex-between">
-                <span style="color:var(--text-muted);">المديونية السابقة للعميل:</span>
-                <strong style="color:var(--accent-red);font-weight:900;">${previousDebt.toLocaleString('ar-EG')} ج.م</strong>
-            </div>
-            <div class="flex-between">
-                <span style="color:var(--text-muted);">إجمالي الفاتورة الجديدة:</span>
-                <strong style="color:#60a5fa;font-weight:900;">${currentInvoiceTotal.toLocaleString('ar-EG')} ج.م</strong>
-            </div>
-            <div class="flex-between" style="border-top:1px dashed var(--border-color);padding-top:0.3rem;">
-                <span style="color:#fff;font-weight:800;">إجمالي الدين القديم + الجديد:</span>
-                <strong style="color:var(--accent-purple);font-weight:900;">${totalDebtBeforePayment.toLocaleString('ar-EG')} ج.م</strong>
-            </div>
-            <div class="flex-between">
-                <span style="color:var(--text-muted);">الدفعة المحصلة الآن:</span>
-                <strong style="color:var(--accent-teal);font-weight:900;">${paidAmount.toLocaleString('ar-EG')} ج.م</strong>
-            </div>
-            <div class="flex-between">
-                <span style="color:var(--text-muted);">المتبقي من الفاتورة الجديدة:</span>
-                <strong style="color:var(--primary-orange);font-weight:900;">${newInvoiceRemaining.toLocaleString('ar-EG')} ج.م</strong>
-            </div>
-            <div class="flex-between" style="background:rgba(239,68,68,0.12);padding:0.4rem 0.6rem;border-radius:6px;border:1px solid rgba(239,68,68,0.3);margin-top:0.2rem;">
-                <span style="color:#fff;font-weight:900;">إجمالي الرصيد المتبقي على العميل:</span>
-                <strong style="color:var(--accent-red);font-weight:900;font-size:0.95rem;">${totalDebtAfterInvoice.toLocaleString('ar-EG')} ج.م</strong>
-            </div>
-            ${previousDebt > 0 ? `
-                <button class="btn-primary" type="button" style="margin-top:0.35rem;padding:0.45rem;font-size:0.78rem;background:var(--accent-teal);border:none;width:100%;font-weight:800;" onclick="window.openPaymentModal(${customer.id})">
-                    💵 تسديد سند قبض مباشر للدين السابق (${previousDebt.toLocaleString('ar-EG')} ج.م)
-                </button>
-            ` : ''}
-        </div>
-    `;
+    box.innerHTML = renderCustomerDebtBoxHtml(customerId, subtotal);
 };
 
 window.posProcessCheckout = () => {
@@ -892,7 +898,7 @@ window.posProcessCheckout = () => {
         return;
     }
     const customerSelect = document.getElementById('pos-customer-select');
-    const customerId   = customerSelect ? customerSelect.value : '';
+    const customerId   = customerSelect ? customerSelect.value : (state.currentPOSCustomerId || '');
     const customerText = customerSelect && customerSelect.selectedIndex >= 0
         ? customerSelect.options[customerSelect.selectedIndex].text
         : 'عميل نقدي (كاش)';
@@ -911,6 +917,7 @@ window.posProcessCheckout = () => {
         state.currentPOSPaid = undefined;
         state.currentPOSPaidManual = false;
         state.currentPOSDiscount = 0;
+        state.currentPOSCustomerId = '';
         window.showInvoiceModal(invoice);
         window.renderCurrentView();
     }

@@ -120,14 +120,16 @@ export function renderSettingsView() {
     `;
 }
 
-window.toggleUserStatusHandler = (id) => {
+window.toggleUserStatus = window.toggleUserStatusHandler = (id) => {
     state.toggleUserStatus(id);
     window.renderCurrentView();
 };
 
-window.deleteUserHandler = (id) => {
+window.deleteUser = window.deleteUserHandler = (id) => {
     if (confirm('هل أنت متأكد من رغبتك في حذف هذا حساب الموظف نهائياً؟')) {
-        state.deleteUser(id);
-        window.renderCurrentView();
+        const deleted = state.deleteUser(id);
+        if (deleted) {
+            window.renderCurrentView();
+        }
     }
 };
