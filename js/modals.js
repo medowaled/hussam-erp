@@ -332,34 +332,53 @@ export function openCollectDelegateCashModal(userId) {
     if (!user) return;
 
     const currentCashHand = Number(user.delegateCashHand) || 0;
+    const totalPreviouslyCollected = state.getTotalDelegateCollections(userId);
 
     const body = `
         <form onsubmit="return false;">
             <div style="background:#0f1524;border:1px solid var(--border-color);border-radius:12px;padding:1rem;margin-bottom:1.25rem;">
-                <div style="font-weight:900;color:#fff;font-size:1.05rem;">👤 المندوب: ${user.name}</div>
-                <div style="font-size:0.8rem;color:var(--primary-orange);margin-top:0.25rem;">المسمى الوظيفي: ${user.role || 'مندوب مبيعات'}</div>
-                <div style="font-size:1.15rem;font-weight:900;color:var(--accent-teal);margin-top:0.6rem;">
-                    💵 إجمالي النقدية المحصلة مع المندوب الآن: ${currentCashHand.toLocaleString('ar-EG')} ج.م
+                <div class="flex-between">
+                    <div>
+                        <div style="font-weight:900;color:#fff;font-size:1.05rem;">👤 المندوب: ${user.name}</div>
+                        <div style="font-size:0.8rem;color:var(--primary-orange);margin-top:0.25rem;">المسمى الوظيفي: ${user.role || 'مندوب مبيعات'}</div>
+                    </div>
+                    <button type="button" class="btn-secondary" style="font-size:0.75rem;padding:0.3rem 0.6rem;" onclick="window.openDelegateCollectionsHistoryModal(${user.id})">
+                        📋 سجل توريداته السابقة
+                    </button>
+                </div>
+                <div class="grid-2" style="margin-top:0.75rem;gap:0.5rem;">
+                    <div style="background:rgba(0,200,151,0.08);border:1px solid rgba(0,200,151,0.25);border-radius:8px;padding:0.6rem;text-align:center;">
+                        <div style="font-size:0.72rem;color:var(--text-muted);font-weight:700;">💵 النقدية الحالية بعُهدة المندوب</div>
+                        <div style="font-size:1.2rem;font-weight:900;color:var(--accent-teal);margin-top:0.2rem;">
+                            ${currentCashHand.toLocaleString('ar-EG')} ج.م
+                        </div>
+                    </div>
+                    <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:8px;padding:0.6rem;text-align:center;">
+                        <div style="font-size:0.72rem;color:var(--text-muted);font-weight:700;">📥 إجمالي ما ورّده للخزينة سابقاً</div>
+                        <div style="font-size:1.2rem;font-weight:900;color:#60a5fa;margin-top:0.2rem;">
+                            ${totalPreviouslyCollected.toLocaleString('ar-EG')} ج.م
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <div class="form-group">
-                <label class="form-label" style="font-weight:800;color:var(--primary-orange);">المبلغ المحصل وتوريده للخزينة (ج.م) *</label>
+                <label class="form-label" style="font-weight:800;color:var(--primary-orange);">المبلغ المراد تحصيله وتوريده للخزينة (ج.م) *</label>
                 <input type="number" id="m-collect-amount" class="form-control" value="${currentCashHand}" min="1" max="${currentCashHand || 1000000}" style="font-size:1.25rem;font-weight:900;color:var(--accent-teal);" required>
             </div>
 
             <div class="form-group">
-                <label class="form-label">البيان / ملاحظات التحصيل</label>
-                <input type="text" id="m-collect-notes" class="form-control" placeholder="مثال: استلام نقدية عهدة مبيعات خط بنها..." value="استلام نقدية عهدة مبيعات المندوب">
+                <label class="form-label">البيان / تفاصيل وملاحظات التحصيل</label>
+                <input type="text" id="m-collect-notes" class="form-control" placeholder="مثال: استلام نقدية عهدة مبيعات خط بنها..." value="توريد نقدية من عهدة مبيعات المندوب">
             </div>
 
             <div style="background:rgba(0,200,151,0.08);border:1px solid rgba(0,200,151,0.25);border-radius:10px;padding:0.75rem;font-size:0.8rem;color:var(--accent-teal);font-weight:700;">
-                💡 يتم خصم هذا المبلغ فورياً من ذمة المندوب وإضافته لرصيد السيولة النقدية بالخزينة الرئيسية للنظام.
+                💡 بمجرد التأكيد، سيتم خصم المبلغ فوراً من عهدة المندوب، وإضافته للنقدية الحالية بالخزينة الرئيسية، وإصدار سند قبض وتوريد مالي رسمي مسجل في كشوفات الحسابات والتقارير.
             </div>
         </form>
     `;
 
-    openModalHTML(`💵 تحصيل مبالغ نقدية من المندوب (${user.name})`, body, () => {
+    openModalHTML(`💵 تحصيل وتوريد مبالغ نقدية من المندوب (${user.name})`, body, () => {
         const amount = Number(document.getElementById('m-collect-amount')?.value || 0);
         const notes = document.getElementById('m-collect-notes')?.value.trim() || '';
 
@@ -374,11 +393,207 @@ export function openCollectDelegateCashModal(userId) {
             return false;
         }
 
-        alert(`✅ تم تحصيل مبلغ ${amount.toLocaleString('ar-EG')} ج.م من المندوب (${user.name}) وتوريدها للخزينة الرئيسية بنجاح!`);
+        setTimeout(() => {
+            if (res.voucher) {
+                window.showCollectionVoucherModal(res.voucher.id);
+            }
+        }, 200);
+
         return true;
-    }, '✅ تأكيد واستلام المبلغ');
+    }, '✅ تأكيد واستلام المبلغ وإصدار السند');
 }
 window.openCollectDelegateCashModal = openCollectDelegateCashModal;
+
+/* ─── Printable / Viewable Collection Receipt Voucher Modal ─────── */
+export function showCollectionVoucherModal(voucherId) {
+    const voucher = (state.delegateCollections || []).find(v => String(v.id) === String(voucherId) || v.voucherNumber === voucherId);
+    if (!voucher) {
+        alert('لم يتم العثور على بيانات سند التحصيل!');
+        return;
+    }
+
+    const body = `
+        <div class="voucher-print-area invoice-print-area" id="printable-voucher" style="background:#fff;color:#000;padding:1.5rem;border-radius:12px;font-family:'Tajawal',sans-serif;box-shadow:0 8px 30px rgba(0,0,0,0.5);">
+            <!-- Voucher Header -->
+            <div style="text-align:center;border-bottom:2px dashed #000;padding-bottom:0.75rem;margin-bottom:1rem;">
+                <div style="font-size:1.35rem;font-weight:900;letter-spacing:-0.5px;color:#000;">🏪 مؤسسة حسام حسني للتجارة والتوزيع</div>
+                <div style="font-size:0.85rem;color:#444;margin-top:0.2rem;">سند قبض وتوريد نقدية للخزينة الرئيسية</div>
+                <div style="display:inline-block;background:#000;color:#fff;font-weight:900;padding:0.25rem 0.75rem;border-radius:6px;font-size:0.85rem;margin-top:0.4rem;">
+                    رقم السند: ${voucher.voucherNumber}
+                </div>
+            </div>
+
+            <!-- Meta info -->
+            <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:0.8rem;border-bottom:1px solid #ddd;padding-bottom:0.6rem;">
+                <div>
+                    <div><b>📅 التاريخ:</b> ${voucher.createdAt}</div>
+                    <div style="margin-top:0.25rem;"><b>👤 المندوب المسلِّم:</b> <span style="font-size:0.95rem;font-weight:900;">${voucher.delegateName}</span></div>
+                </div>
+                <div style="text-align:left;">
+                    <div><b>🏢 الخزينة المستلمة:</b> الخزينة الرئيسية</div>
+                    <div style="margin-top:0.25rem;"><b>✍️ أمين الخزينة:</b> ${voucher.collectedBy}</div>
+                </div>
+            </div>
+
+            <!-- Main Amount Banner -->
+            <div style="background:#f4f6f8;border:2px solid #000;border-radius:8px;padding:0.85rem;text-align:center;margin-bottom:1rem;">
+                <div style="font-size:0.78rem;color:#555;font-weight:700;">المبلغ المستلم والمورد للخزينة</div>
+                <div style="font-size:1.8rem;font-weight:900;color:#000;margin-top:0.2rem;">
+                    ${voucher.amount.toLocaleString('ar-EG')} <span style="font-size:1rem;">جنيه مصري فقط لا غير</span>
+                </div>
+            </div>
+
+            <!-- Statement / Notes -->
+            <div style="background:#fff;border:1px solid #ddd;border-radius:6px;padding:0.6rem 0.8rem;font-size:0.85rem;margin-bottom:1rem;">
+                <b>البيان / الغرض:</b> ${voucher.notes || 'توريد نقدية عهدة مبيعات المندوب'}
+            </div>
+
+            <!-- Financial Custody Breakdown Table -->
+            <table style="width:100%;border-collapse:collapse;font-size:0.82rem;margin-bottom:1.25rem;border:1px solid #ddd;">
+                <thead>
+                    <tr style="background:#eee;border-bottom:1px solid #ccc;text-align:right;">
+                        <th style="padding:0.4rem 0.5rem;border-left:1px solid #ddd;">بيان الحساب المالي</th>
+                        <th style="padding:0.4rem 0.5rem;text-align:center;">المبلغ بالجنيه</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="border-bottom:1px solid #eee;">
+                        <td style="padding:0.4rem 0.5rem;border-left:1px solid #ddd;">رصيد عهدة المندوب قبل التوريد</td>
+                        <td style="padding:0.4rem 0.5rem;text-align:center;font-weight:700;">${(voucher.delegateCashBefore || (voucher.delegateCashAfter + voucher.amount)).toLocaleString('ar-EG')} ج.م</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #eee;background:rgba(0,200,151,0.08);">
+                        <td style="padding:0.4rem 0.5rem;border-left:1px solid #ddd;font-weight:900;color:#00875a;">المبلغ المسلم والمورد الآن (خصم من العهدة)</td>
+                        <td style="padding:0.4rem 0.5rem;text-align:center;font-weight:900;color:#00875a;">− ${voucher.amount.toLocaleString('ar-EG')} ج.م</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #eee;font-weight:900;">
+                        <td style="padding:0.4rem 0.5rem;border-left:1px solid #ddd;color:#d9534f;">المتبقي بذمة وعُهدة المندوب بالشارع</td>
+                        <td style="padding:0.4rem 0.5rem;text-align:center;color:#d9534f;font-size:0.95rem;">${voucher.delegateCashAfter.toLocaleString('ar-EG')} ج.م</td>
+                    </tr>
+                    <tr style="background:#fafafa;">
+                        <td style="padding:0.4rem 0.5rem;border-left:1px solid #ddd;font-weight:800;color:#2c3e50;">رصيد الخزينة الرئيسية بعد استلام المبلغ</td>
+                        <td style="padding:0.4rem 0.5rem;text-align:center;font-weight:800;color:#2c3e50;">${(voucher.mainCashAfter || (voucher.mainCashBefore + voucher.amount)).toLocaleString('ar-EG')} ج.م</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Signatures Section -->
+            <div style="display:flex;justify-content:space-between;margin-top:1.5rem;padding-top:0.75rem;border-top:2px dashed #999;font-size:0.85rem;">
+                <div style="text-align:center;width:45%;">
+                    <div style="font-weight:800;margin-bottom:2rem;">المندوب المسلِّم</div>
+                    <div style="border-top:1px dotted #555;padding-top:0.25rem;">${voucher.delegateName}</div>
+                </div>
+                <div style="text-align:center;width:45%;">
+                    <div style="font-weight:800;margin-bottom:2rem;">المستلم / أمين الخزينة</div>
+                    <div style="border-top:1px dotted #555;padding-top:0.25rem;">${voucher.collectedBy}</div>
+                </div>
+            </div>
+
+            <!-- Footer Note -->
+            <div style="text-align:center;margin-top:1.25rem;font-size:0.72rem;color:#777;border-top:1px solid #eee;padding-top:0.4rem;">
+                نظام حسام حسني لإدارة المخازن والمبيعات والحسابات • نسخة رقمية رسمية معتمدة
+            </div>
+        </div>
+
+        <div style="display:flex;gap:0.75rem;margin-top:1.25rem;justify-content:center;flex-wrap:wrap;">
+            <button class="btn-primary" type="button" style="padding:0.6rem 1.5rem;font-weight:900;box-shadow:0 4px 16px rgba(255,159,26,0.4);" onclick="window.print()">
+                🖨️ طباعة سند القبض والتوريد
+            </button>
+            <button class="btn-secondary" type="button" style="padding:0.6rem 1.25rem;" onclick="window.closeAnyOpenModal()">
+                ✖️ إغلاق
+            </button>
+        </div>
+    `;
+
+    openModalHTML(`🧾 سند قبض وتوريد نقدية: ${voucher.voucherNumber}`, body, () => true, '');
+    const submitBtn = document.getElementById('modal-submit-btn');
+    if (submitBtn) submitBtn.style.display = 'none';
+}
+window.showCollectionVoucherModal = showCollectionVoucherModal;
+
+/* ─── Delegate Collections History Ledger Modal ─────────────────── */
+export function openDelegateCollectionsHistoryModal(userId = null) {
+    const user = userId ? state.users.find(u => u.id === userId) : null;
+    const collections = state.getDelegateCollections(userId);
+    const totalAmount = state.getTotalDelegateCollections(userId);
+
+    const body = `
+        <div>
+            <div class="flex-between" style="background:#0f1524;border:1px solid var(--border-color);border-radius:12px;padding:1rem;margin-bottom:1.25rem;flex-wrap:wrap;gap:0.75rem;">
+                <div>
+                    <div style="font-size:1.1rem;font-weight:900;color:#fff;">
+                        ${user ? `👤 سجل توريدات وتحصيلات المندوب: ${user.name}` : '🌐 كشف توريدات وتحصيلات كافة المناديب بالخزينة'}
+                    </div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.25rem;">
+                        توثيق سندات استلام المبالغ النقدية وتأثيرها على حسابات الخزينة وعُهد المناديب.
+                    </div>
+                </div>
+                <div style="background:rgba(0,200,151,0.12);border:1px solid rgba(0,200,151,0.3);border-radius:10px;padding:0.5rem 1rem;text-align:center;">
+                    <div style="font-size:0.72rem;color:var(--text-muted);font-weight:700;">إجمالي المبالغ المستلمة</div>
+                    <div style="font-size:1.3rem;font-weight:900;color:var(--accent-teal);">
+                        ${totalAmount.toLocaleString('ar-EG')} <span style="font-size:0.8rem;">ج.م</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive" style="max-height:420px;overflow-y:auto;">
+                <table class="erp-table">
+                    <thead>
+                        <tr>
+                            <th>رقم السند</th>
+                            <th>التاريخ والوقت</th>
+                            <th>اسم المندوب</th>
+                            <th>المبلغ المورد</th>
+                            <th>المتبقي بعُهدته</th>
+                            <th>الخزينة بعد التوريد</th>
+                            <th>البيان</th>
+                            <th>المستلم</th>
+                            <th>معاينة وطباعة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${collections.length === 0 ? `
+                            <tr>
+                                <td colspan="9">
+                                    <div class="empty-table-state">
+                                        <i>💵</i>
+                                        <p style="font-weight:700;color:#fff;">لا توجد أي سندات توريد مسجلة حتى الآن</p>
+                                        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.25rem;">يتم تسجيل السندات تلقائياً عند إجراء أي تحصيل من المندوب.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        ` : collections.map(v => `
+                            <tr>
+                                <td style="font-weight:900;color:var(--primary-orange);">${v.voucherNumber}</td>
+                                <td style="font-size:0.8rem;">${v.createdAt}</td>
+                                <td style="font-weight:800;color:#fff;">${v.delegateName}</td>
+                                <td style="font-weight:900;color:var(--accent-teal);font-size:0.95rem;">${v.amount.toLocaleString('ar-EG')} ج.م</td>
+                                <td style="color:var(--accent-red);font-weight:800;">${v.delegateCashAfter.toLocaleString('ar-EG')} ج.م</td>
+                                <td style="color:#60a5fa;font-weight:800;">${(v.mainCashAfter || (v.mainCashBefore + v.amount)).toLocaleString('ar-EG')} ج.م</td>
+                                <td style="font-size:0.8rem;color:var(--text-muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${v.notes}">${v.notes}</td>
+                                <td style="font-size:0.8rem;">${v.collectedBy}</td>
+                                <td>
+                                    <button class="btn-secondary" style="font-size:0.75rem;padding:0.25rem 0.6rem;color:var(--primary-orange);" onclick="window.showCollectionVoucherModal('${v.id}')">
+                                        🖨️ معاينة وطباعة
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    openModalHTML(`📋 سجل سندات توريد الخزينة`, body, () => true, '');
+    const submitBtn = document.getElementById('modal-submit-btn');
+    if (submitBtn) submitBtn.style.display = 'none';
+}
+window.openDelegateCollectionsHistoryModal = openDelegateCollectionsHistoryModal;
+
+window.closeAnyOpenModal = () => {
+    const backdrop = document.getElementById('modal-backdrop');
+    if (backdrop) backdrop.classList.remove('active');
+};
 
 window.qToggleAllCustomers = (checked) => {
     document.querySelectorAll('.q-cust-item').forEach(el => {

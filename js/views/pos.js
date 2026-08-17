@@ -464,8 +464,12 @@ function renderAdminEmployeePosHubView() {
                                 <strong style="color:var(--primary-orange);font-weight:900;">${empSalesToday.toLocaleString('ar-EG')} ج.م</strong>
                             </div>
                             <div class="flex-between">
-                                <span style="color:var(--text-muted);">💵 نقود محصلة مع المندوب:</span>
+                                <span style="color:var(--text-muted);">💵 نقدية حالية مع المندوب:</span>
                                 <strong style="color:var(--accent-teal);font-weight:900;">${empCashHand.toLocaleString('ar-EG')} ج.م</strong>
+                            </div>
+                            <div class="flex-between">
+                                <span style="color:var(--text-muted);">📥 إجمالي ما ورّده للخزينة:</span>
+                                <strong style="color:#60a5fa;font-weight:900;">${state.getTotalDelegateCollections(emp.id).toLocaleString('ar-EG')} ج.م</strong>
                             </div>
                             <div class="flex-between">
                                 <span style="color:var(--text-muted);">👥 ديون العملاء المخصصين له:</span>
@@ -475,11 +479,16 @@ function renderAdminEmployeePosHubView() {
 
                         <!-- Employee Action Buttons -->
                         <div class="emp-card-actions">
-                            ${empCashHand > 0 ? `
-                                <button class="btn-primary" style="background:var(--accent-teal);color:#000;border:none;font-size:0.85rem;padding:0.55rem;" onclick="window.openCollectDelegateCashModal(${emp.id})">
-                                    💵 تحصيل المبلغ من المندوب (${empCashHand.toLocaleString('ar-EG')} ج)
+                            <div style="display:grid;grid-template-columns:${empCashHand > 0 ? '1fr 1fr' : '1fr'};gap:0.4rem;">
+                                ${empCashHand > 0 ? `
+                                    <button class="btn-primary" style="background:var(--accent-teal);color:#000;border:none;font-size:0.82rem;padding:0.5rem;font-weight:900;" onclick="window.openCollectDelegateCashModal(${emp.id})">
+                                        💵 تحصيل (${empCashHand.toLocaleString('ar-EG')} ج)
+                                    </button>
+                                ` : ''}
+                                <button class="btn-secondary" style="font-size:0.8rem;padding:0.5rem;color:var(--primary-orange);" onclick="window.openDelegateCollectionsHistoryModal(${emp.id})">
+                                    📋 سجل توريداته
                                 </button>
-                            ` : ''}
+                            </div>
                             <button class="btn-enter-emp-pos" onclick="window.posEnterEmployeePos(${emp.id})">
                                 🛒 دخول نقطة بيعه
                             </button>

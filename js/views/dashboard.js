@@ -106,7 +106,7 @@ export function renderDashboardView() {
                         <span>🪙 رأس مال البضاعة والسيولة المالية الشاملة</span>
                         <span class="badge badge-teal">مربوط حياً بالمخزن والمناديب</span>
                     </div>
-                    <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">تقييم لحظي شامل لرأس مال التجارة (بضاعة المخزن + الخزينة + عُهد المناديب + ديون السوق).</div>
+                    <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">تقييم لحظي شامل لرأس مال التجارة (بضاعة المخزن + نقدية الخزينة + عُهد المناديب + ديون السوق).</div>
                 </div>
                 <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
                     <div style="text-align:center;background:#0f1524;padding:0.5rem 0.75rem;border-radius:10px;border:1px solid var(--accent-purple);" title="إجمالي قيمة رأس مال التجارة بالكامل">
@@ -118,18 +118,16 @@ export function renderDashboardView() {
                         <div style="font-size:0.95rem;font-weight:800;color:var(--primary-orange);">${totalInventoryCost.toLocaleString('ar-EG')} ج.م</div>
                     </div>
                     <div style="text-align:center;background:#0f1524;padding:0.5rem 0.75rem;border-radius:10px;border:1px solid var(--border-color);">
-                        <div style="font-size:0.68rem;color:var(--text-muted);">قيمة البيع</div>
-                        <div style="font-size:0.95rem;font-weight:800;color:#60a5fa;">${totalInventoryValue.toLocaleString('ar-EG')} ج.م</div>
+                        <div style="font-size:0.68rem;color:var(--text-muted);">السيولة الشاملة 🪙</div>
+                        <div style="font-size:0.95rem;font-weight:800;color:var(--accent-teal);">${totalLiquidity.toLocaleString('ar-EG')} ج.م</div>
                     </div>
-                    <div style="text-align:center;background:#0f1524;padding:0.5rem 0.75rem;border-radius:10px;border:1px solid rgba(15,211,160,0.3);">
-                        <div style="font-size:0.68rem;color:var(--text-muted);">الأرباح المحتبسة</div>
-                        <div style="font-size:0.95rem;font-weight:800;color:${totalInventoryProfit >= 0 ? 'var(--accent-teal)' : 'var(--accent-red)'};">
-                            ${totalInventoryProfit >= 0 ? '+' : ''}${totalInventoryProfit.toLocaleString('ar-EG')} ج.م
-                        </div>
+                    <div style="text-align:center;background:#0f1524;padding:0.5rem 0.75rem;border-radius:10px;border:1px solid var(--primary-orange);cursor:pointer;" onclick="window.openEditCashLiquidityModal()" title="اضغط لتعديل نقدية الخزينة يدوياً ✏️">
+                        <div style="font-size:0.68rem;color:var(--primary-orange);font-weight:700;">النقدية الحالية بالخزينة 💵 ✏️</div>
+                        <div style="font-size:0.95rem;font-weight:900;color:#60a5fa;" id="dashboard-cash-liquidity-val">${mainCashOnHand.toLocaleString('ar-EG')} ج.م</div>
                     </div>
-                    <div style="text-align:center;background:#0f1524;padding:0.5rem 0.75rem;border-radius:10px;border:1px solid var(--primary-orange);cursor:pointer;" onclick="window.openEditCashLiquidityModal()" title="اضغط لتعديل السيولة النقدية يدوياً ✏️">
-                        <div style="font-size:0.68rem;color:var(--primary-orange);font-weight:700;">السيولة النقدية الحالية ✏️</div>
-                        <div style="font-size:0.95rem;font-weight:900;color:var(--accent-teal);" id="dashboard-cash-liquidity-val">${mainCashOnHand.toLocaleString('ar-EG')} ج.م</div>
+                    <div style="text-align:center;background:#0f1524;padding:0.5rem 0.75rem;border-radius:10px;border:1px solid rgba(139,92,246,0.3);" title="نقدية محصلة مع المناديب بالشارع">
+                        <div style="font-size:0.68rem;color:var(--text-muted);font-weight:700;">عُهدة المناديب 🛵</div>
+                        <div style="font-size:0.95rem;font-weight:800;color:var(--accent-purple);">${delegatesCashHand.toLocaleString('ar-EG')} ج.م</div>
                     </div>
                 </div>
             </div>
@@ -206,40 +204,68 @@ export function renderDashboardView() {
             </div>
         </div>
 
-        <!-- Recent Sales & Low Stock Row -->
-        <div class="grid-2">
-            <!-- Recent Sales (With Print Icon per Invoice) -->
+        <!-- Recent Sales, Collections & Low Stock Row -->
+        <div class="grid-3" style="margin-bottom:1.5rem;">
+            <!-- Recent Sales -->
             <div class="card-dark">
                 <div class="flex-between" style="margin-bottom:1rem;">
-                    <div style="font-size:1rem;font-weight:800;display:flex;align-items:center;gap:0.5rem;">
-                        🛒 آخر عمليات البيع الصادرة
+                    <div style="font-size:0.95rem;font-weight:800;display:flex;align-items:center;gap:0.5rem;">
+                        🛒 آخر المبيعات
                     </div>
-                    <button class="btn-secondary" style="font-size:0.78rem;padding:0.35rem 0.85rem;" onclick="window.navigateToInvoices()">
-                        عرض الكل ←
+                    <button class="btn-secondary" style="font-size:0.75rem;padding:0.25rem 0.65rem;" onclick="window.navigateToInvoices()">
+                        الكل ←
                     </button>
                 </div>
                 ${todayInvoices.length === 0 ? `
                     <div class="empty-table-state">
                         <i>🛍️</i>
-                        <p style="font-weight:700;color:var(--text-main);">لا توجد عمليات بيع حتى الآن</p>
-                        <p style="font-size:0.78rem;margin-top:0.25rem;">أضف منتجات وابدأ أول عملية بيع عبر كاشير الـ POS.</p>
+                        <p style="font-weight:700;color:var(--text-main);font-size:0.85rem;">لا توجد مبيعات حتى الآن</p>
                     </div>
                 ` : `
-                    <div style="display:flex;flex-direction:column;gap:0.65rem;">
-                        ${todayInvoices.slice(0, 4).map(inv => `
-                            <div class="flex-between" style="background:#0f1524;padding:0.65rem 0.9rem;border-radius:10px;border:1px solid var(--border-color);">
-                                <div style="display:flex;align-items:center;gap:0.65rem;">
-                                    <button class="action-btn" title="معاينة وطباعة الفاتورة" style="background:#1a233a;color:var(--primary-orange);border:1px solid rgba(255,159,26,0.3);padding:0.3rem 0.5rem;border-radius:8px;" onclick="window.reprintInvoice(${inv.id})">
-                                        🖨️
-                                    </button>
-                                    <div>
-                                        <div style="font-weight:800;color:var(--primary-orange);font-size:0.88rem;">${inv.invoiceNumber}</div>
-                                        <div style="font-size:0.75rem;color:var(--text-muted);">${inv.customerName} • ${inv.createdAt}</div>
-                                    </div>
+                    <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                        ${todayInvoices.slice(0, 3).map(inv => `
+                            <div class="flex-between" style="background:#0f1524;padding:0.55rem 0.75rem;border-radius:8px;border:1px solid var(--border-color);">
+                                <div>
+                                    <div style="font-weight:800;color:var(--primary-orange);font-size:0.82rem;">${inv.invoiceNumber}</div>
+                                    <div style="font-size:0.7rem;color:var(--text-muted);">${inv.customerName}</div>
                                 </div>
                                 <div style="text-align:left;">
-                                    <div style="font-weight:800;color:var(--accent-teal);font-size:0.88rem;">${inv.grandTotal} ج.م</div>
-                                    <div style="font-size:0.7rem;color:var(--text-muted);">${inv.items.length} أصناف</div>
+                                    <div style="font-weight:800;color:var(--accent-teal);font-size:0.82rem;">${inv.grandTotal} ج.م</div>
+                                    <div style="font-size:0.68rem;color:var(--text-muted);">${inv.createdAt}</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `}
+            </div>
+
+            <!-- Recent Collections from Delegates -->
+            <div class="card-dark">
+                <div class="flex-between" style="margin-bottom:1rem;">
+                    <div style="font-size:0.95rem;font-weight:800;display:flex;align-items:center;gap:0.5rem;color:var(--accent-teal);">
+                        📥 آخر توريدات المناديب
+                    </div>
+                    <button class="btn-secondary" style="font-size:0.75rem;padding:0.25rem 0.65rem;" onclick="window.setReportTab('collections'); window.appRouter('reports');">
+                        السجل كامل ←
+                    </button>
+                </div>
+                ${(state.delegateCollections || []).length === 0 ? `
+                    <div class="empty-table-state">
+                        <i style="color:var(--accent-teal);">💵</i>
+                        <p style="font-weight:700;color:var(--text-main);font-size:0.85rem;">لا توجد توريدات مسجلة بعد</p>
+                        <p style="font-size:0.72rem;margin-top:0.2rem;">حصل النقدية من المناديب لتظهر هنا فوراً.</p>
+                    </div>
+                ` : `
+                    <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                        ${(state.delegateCollections || []).slice(0, 3).map(v => `
+                            <div class="flex-between" style="background:#0f1524;padding:0.55rem 0.75rem;border-radius:8px;border:1px solid rgba(0,200,151,0.25);">
+                                <div>
+                                    <div style="font-weight:800;color:#fff;font-size:0.82rem;">👤 ${v.delegateName}</div>
+                                    <div style="font-size:0.7rem;color:var(--text-muted);">${v.voucherNumber} • ${v.createdAt}</div>
+                                </div>
+                                <div style="text-align:left;">
+                                    <div style="font-weight:900;color:var(--accent-teal);font-size:0.85rem;">+${v.amount.toLocaleString('ar-EG')} ج.م</div>
+                                    <button style="background:transparent;border:none;color:var(--primary-orange);font-size:0.7rem;cursor:pointer;text-decoration:underline;padding:0;" onclick="window.showCollectionVoucherModal('${v.id}')">🖨️ السند</button>
                                 </div>
                             </div>
                         `).join('')}
@@ -250,31 +276,29 @@ export function renderDashboardView() {
             <!-- Low Stock Alerts -->
             <div class="card-dark">
                 <div class="flex-between" style="margin-bottom:1rem;">
-                    <div style="font-size:1rem;font-weight:800;display:flex;align-items:center;gap:0.5rem;color:#fff;flex-wrap:wrap;">
-                        ⚠️ أصناف اقتربت من النفاد
+                    <div style="font-size:0.95rem;font-weight:800;display:flex;align-items:center;gap:0.5rem;color:#fff;flex-wrap:wrap;">
+                        ⚠️ نقص المخزون
                         <span class="badge badge-red">${lowStockCount} أصناف</span>
                     </div>
                     <button class="btn-secondary" style="font-size:0.75rem;padding:0.25rem 0.65rem;" onclick="window.appRouter('inventory')">
-                        عرض الكل ←
+                        المخزون ←
                     </button>
                 </div>
                 ${lowStockCount === 0 ? `
                     <div class="empty-table-state">
                         <i style="color:var(--accent-teal);">✅</i>
-                        <p style="font-weight:700;color:var(--text-main);">المخزون مستقر تماماً</p>
-                        <p style="font-size:0.78rem;margin-top:0.25rem;">جميع الأصناف تتجاوز الحدود الحرجة.</p>
+                        <p style="font-weight:700;color:var(--text-main);font-size:0.85rem;">المخزون مستقر تماماً</p>
                     </div>
                 ` : `
-                    <div style="display:flex;flex-direction:column;gap:0.65rem;">
-                        ${state.products.filter(p => p.stockPacks <= p.minStockPacks).map(p => `
-                            <div class="flex-between" style="background:#0f1524;padding:0.65rem 0.9rem;border-radius:10px;border:1px solid rgba(239,68,68,0.2);">
+                    <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                        ${state.products.filter(p => p.stockPacks <= p.minStockPacks).slice(0, 3).map(p => `
+                            <div class="flex-between" style="background:#0f1524;padding:0.55rem 0.75rem;border-radius:8px;border:1px solid rgba(239,68,68,0.2);">
                                 <div>
-                                    <div style="font-weight:800;color:#fff;font-size:0.88rem;">${p.name}</div>
-                                    <div style="font-size:0.75rem;color:var(--text-muted);">حد الطلب: ${p.minStockPacks} علبة</div>
+                                    <div style="font-weight:800;color:#fff;font-size:0.82rem;">${p.name}</div>
+                                    <div style="font-size:0.7rem;color:var(--text-muted);">المتاح: <strong style="color:var(--accent-red);">${p.stockPacks} علبة</strong></div>
                                 </div>
-                                <div style="text-align:left;">
-                                    <div style="font-weight:900;color:var(--accent-red);font-size:0.88rem;">${p.stockPacks} علبة</div>
-                                    <button class="btn-danger" style="font-size:0.7rem;padding:0.2rem 0.5rem;margin-top:0.2rem;" onclick="window.openRestockModal(${p.id})">توريد</button>
+                                <div>
+                                    <button class="btn-danger" style="font-size:0.68rem;padding:0.2rem 0.45rem;" onclick="window.openRestockModal(${p.id})">توريد</button>
                                 </div>
                             </div>
                         `).join('')}

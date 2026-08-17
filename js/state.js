@@ -14,7 +14,8 @@ const STORAGE_KEYS = {
     USERS: 'hussam_erp_users_v2.5',
     CART: 'hussam_erp_cart_v2.5',
     CURRENT_USER: 'hussam_erp_current_user_v2.5',
-    CASH_ON_HAND: 'hussam_erp_cash_on_hand_v2.5'
+    CASH_ON_HAND: 'hussam_erp_cash_on_hand_v2.5',
+    DELEGATE_COLLECTIONS: 'hussam_erp_delegate_collections_v2.5'
 };
 
 class ERPState {
@@ -93,6 +94,7 @@ class ERPState {
         this.currentUser = this.load(STORAGE_KEYS.CURRENT_USER, null);
         this.cart = this.load(STORAGE_KEYS.CART, []);
         this.cashOnHand = this.load(STORAGE_KEYS.CASH_ON_HAND, 60);
+        this.delegateCollections = this.load(STORAGE_KEYS.DELEGATE_COLLECTIONS, []);
         this.activeView = 'dashboard';
         this.currentPOSCustomerId = '';
         this.listeners = [];
@@ -148,8 +150,9 @@ class ERPState {
             case STORAGE_KEYS.NOTIFICATIONS:   this.notifications = value;   break;
             case STORAGE_KEYS.USERS:           this.users = value;           break;
             case STORAGE_KEYS.CART:            this.cart = value;            break;
-            case STORAGE_KEYS.CURRENT_USER:    this.currentUser = value;     break;
-            case STORAGE_KEYS.CASH_ON_HAND:    this.cashOnHand = value;      break;
+            case STORAGE_KEYS.CURRENT_USER:        this.currentUser = value;     break;
+            case STORAGE_KEYS.CASH_ON_HAND:        this.cashOnHand = value;      break;
+            case STORAGE_KEYS.DELEGATE_COLLECTIONS: this.delegateCollections = value || []; break;
         }
     }
 
@@ -355,21 +358,20 @@ class ERPState {
             customer.lastPaymentDate = new Date().toISOString().split('T')[0];
             this.save(STORAGE_KEYS.CUSTOMERS, this.customers);
 
-            // Update Cash Liquidity (Always add payment receipt cash to main cash liquidity)
+            // Update Cash Liquidity: If collected by delegate -> to delegate cash hand; if admin -> to main cashOnHand
             const sellerUser = this.currentUser && this.users.find(u => u.id === this.currentUser.id);
             const isDelegate = sellerUser && sellerUser.role !== 'مدير عام' && sellerUser.id !== 1;
 
             if (isDelegate) {
                 sellerUser.delegateCashHand = (Number(sellerUser.delegateCashHand) || 0) + pay;
                 this.save(STORAGE_KEYS.USERS, this.users);
+            } else {
+                this.updateCashOnHand((Number(this.cashOnHand) || 0) + pay);
             }
-            
-            // Instantly update main cash liquidity and DOM element
-            this.updateCashOnHand((Number(this.cashOnHand) || 0) + pay);
 
             this.addNotification({
                 title: `💵 تسجيل سند قبض جديد (${customer.name})`,
-                message: `تم تسليم مبلغ ${pay.toLocaleString('ar-EG')} ج.م من العميل (${customer.name}) وتوريدها فورياً لرصيد السيولة النقدية.`,
+                message: `تم تسليم مبلغ ${pay.toLocaleString('ar-EG')} ج.م من العميل (${customer.name}) ${isDelegate ? `بواسطة المندوب (${sellerUser.name}) وإضافتها لعهدته` : 'وتوريدها فورياً للخزينة الرئيسية'}.`,
                 type: 'info'
             });
 
@@ -1008,7 +1010,7 @@ class ERPState {
         return { success: true };
     }
 
-    /* Admin Cash Collection from Delegate */
+    /* Admin Cash Collection from Delegate & Financial Vouchers Engine */
     collectDelegateCash(userId, amount, notes = '') {
         const user = this.users.find(u => u.id === userId);
         if (!user) return { success: false, message: 'الموظف غير موجود!' };
@@ -1017,21 +1019,75 @@ class ERPState {
         if (collectAmount <= 0) return { success: false, message: 'يرجى إدخال مبلغ صحيح للتحصيل!' };
 
         const currentHand = Number(user.delegateCashHand) || 0;
+        const mainCashBefore = Number(this.cashOnHand) || 0;
+        const remainingHand = Math.max(0, currentHand - collectAmount);
+        const mainCashAfter = mainCashBefore + collectAmount;
 
-        user.delegateCashHand = Math.max(0, currentHand - collectAmount);
-        this.cashOnHand += collectAmount;
-
+        // 1. Update balances
+        user.delegateCashHand = remainingHand;
+        user.totalCollectedCash = (Number(user.totalCollectedCash) || 0) + collectAmount;
         this.save(STORAGE_KEYS.USERS, this.users);
-        this.save(STORAGE_KEYS.CASH_ON_HAND, this.cashOnHand);
 
+        // 2. Update Main Cash and trigger UI elements
+        this.updateCashOnHand(mainCashAfter);
+
+        // 3. Generate Official Collection / Treasury Receipt Voucher
+        const dateNow = new Date();
+        const voucherCount = (this.delegateCollections || []).length + 1;
+        const voucher = {
+            id: Date.now(),
+            voucherNumber: `REC-${dateNow.getFullYear()}${String(dateNow.getMonth() + 1).padStart(2, '0')}-${String(voucherCount).padStart(3, '0')}`,
+            delegateId: user.id,
+            delegateName: user.name,
+            amount: collectAmount,
+            delegateCashBefore: currentHand,
+            delegateCashAfter: remainingHand,
+            mainCashBefore: mainCashBefore,
+            mainCashAfter: mainCashAfter,
+            notes: notes || 'توريد نقدية من عهدة مبيعات المندوب للخزينة الرئيسية',
+            collectedBy: this.currentUser ? this.currentUser.name : 'المدير العام (حسام حسني)',
+            createdAt: dateNow.toLocaleString('ar-EG', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true }),
+            dateIso: dateNow.toISOString()
+        };
+
+        if (!Array.isArray(this.delegateCollections)) {
+            this.delegateCollections = [];
+        }
+        this.delegateCollections.unshift(voucher);
+        this.save(STORAGE_KEYS.DELEGATE_COLLECTIONS, this.delegateCollections);
+
+        // 4. Send detailed notification
         this.addNotification({
-            title: `💵 تحصيل نقدية من المندوب (${user.name})`,
-            message: `تم تحصيل مبلغ ${collectAmount.toLocaleString('ar-EG')} ج.م من المندوب وتوريدها للخزينة الرئيسية. ${notes ? 'البيان: ' + notes : ''}`,
+            title: `💵 توريد نقدية للخزينة من (${user.name})`,
+            message: `تم تحصيل مبلغ <b>${collectAmount.toLocaleString('ar-EG')} ج.م</b> من المندوب وتوريدها للخزينة الرئيسية (${voucher.voucherNumber}).<br>الرصيد المتبقي مع المندوب: <b>${remainingHand.toLocaleString('ar-EG')} ج.م</b> • رصيد الخزينة الحالي: <b>${mainCashAfter.toLocaleString('ar-EG')} ج.م</b>. ${notes ? '<br>البيان: ' + notes : ''}`,
             type: 'info'
         });
 
         this.notify();
-        return { success: true, user, newCashOnHand: this.cashOnHand };
+        return { success: true, user, voucher, newCashOnHand: this.cashOnHand };
+    }
+
+    getDelegateCollections(delegateId = null) {
+        const list = Array.isArray(this.delegateCollections) ? this.delegateCollections : [];
+        if (!delegateId || delegateId === 'all') return list;
+        return list.filter(v => String(v.delegateId) === String(delegateId));
+    }
+
+    getTotalDelegateCollections(delegateId = null) {
+        const list = this.getDelegateCollections(delegateId);
+        return list.reduce((sum, v) => sum + (Number(v.amount) || 0), 0);
+    }
+
+    getAllCollectionsTotal() {
+        return this.getTotalDelegateCollections(null);
+    }
+
+    deleteCollectionVoucher(voucherId) {
+        if (!Array.isArray(this.delegateCollections)) return false;
+        this.delegateCollections = this.delegateCollections.filter(v => String(v.id) !== String(voucherId) && v.voucherNumber !== voucherId);
+        this.save(STORAGE_KEYS.DELEGATE_COLLECTIONS, this.delegateCollections);
+        this.notify();
+        return true;
     }
 
     isAuthenticated() {

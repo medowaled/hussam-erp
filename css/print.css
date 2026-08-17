@@ -83,10 +83,11 @@
     body * {
         visibility: hidden;
     }
-    .invoice-print-area, .invoice-print-area * {
+    .invoice-print-area, .invoice-print-area *,
+    .voucher-print-area, .voucher-print-area * {
         visibility: visible;
     }
-    .invoice-print-area {
+    .invoice-print-area, .voucher-print-area {
         position: absolute;
         left: 0;
         top: 0;
