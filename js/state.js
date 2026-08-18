@@ -458,7 +458,7 @@ class ERPState {
         const customer = checkoutData.customerId ? this.customers.find(c => c.id == checkoutData.customerId) : null;
         const previousDebt = customer ? Number(customer.debt) || 0 : 0;
         const totalDebtBeforePayment = previousDebt + grandTotal;
-        const totalDebtAfterInvoice = previousDebt + remainingDebt;
+        const totalDebtAfterInvoice = Math.max(0, totalDebtBeforePayment - paidAmount);
 
         const invoiceNumber = 'INV-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
 
@@ -515,11 +515,11 @@ class ERPState {
 
         // Update customer debt if applicable
         if (customer) {
-            if (remainingDebt > 0 || paidAmount > 0) {
-                customer.debt += remainingDebt;
-                customer.totalPurchases += grandTotal;
-                this.save(STORAGE_KEYS.CUSTOMERS, this.customers);
-            }
+            customer.debt = totalDebtAfterInvoice;
+            customer.totalPurchases = (Number(customer.totalPurchases) || 0) + grandTotal;
+            customer.paidAmount = (Number(customer.paidAmount) || 0) + paidAmount;
+            customer.lastPaymentDate = new Date().toISOString().split('T')[0];
+            this.save(STORAGE_KEYS.CUSTOMERS, this.customers);
         }
 
         // Build detailed notification for delegate sales, item sell prices, and discounts
@@ -755,11 +755,13 @@ class ERPState {
         if (!inv) return false;
 
         // Safely adjust customer debt if applicable
-        if (inv.customerId && inv.remainingDebt > 0) {
+        if (inv.customerId) {
             const customer = this.customers.find(c => c.id == inv.customerId);
             if (customer) {
-                customer.debt = Math.max(0, customer.debt - inv.remainingDebt);
-                customer.totalPurchases = Math.max(0, customer.totalPurchases - inv.grandTotal);
+                const netDebtChange = (Number(inv.grandTotal) || 0) - (Number(inv.paidAmount) || 0);
+                customer.debt = Math.max(0, (Number(customer.debt) || 0) - netDebtChange);
+                customer.totalPurchases = Math.max(0, (Number(customer.totalPurchases) || 0) - (Number(inv.grandTotal) || 0));
+                customer.paidAmount = Math.max(0, (Number(customer.paidAmount) || 0) - (Number(inv.paidAmount) || 0));
                 this.save(STORAGE_KEYS.CUSTOMERS, this.customers);
             }
         }

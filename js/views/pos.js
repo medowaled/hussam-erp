@@ -22,7 +22,7 @@ function renderCustomerDebtBoxHtml(customerId, subtotal) {
     const previousDebt = Number(customer.debt) || 0;
     const totalDebtBeforePayment = previousDebt + currentInvoiceTotal;
     const newInvoiceRemaining = Math.max(0, currentInvoiceTotal - paidAmount);
-    const totalDebtAfterInvoice = previousDebt + newInvoiceRemaining;
+    const totalDebtAfterInvoice = Math.max(0, totalDebtBeforePayment - paidAmount);
 
     return `
         <div style="background:#090e1a;border:1px solid rgba(255,159,26,0.3);border-radius:10px;padding:0.75rem;font-size:0.8rem;display:flex;flex-direction:column;gap:0.4rem;">

@@ -1227,11 +1227,13 @@ function _renderInvoiceModal(invoice, isConfirmed) {
 
     const previousDebt = invoice.previousDebt !== undefined
         ? Number(invoice.previousDebt)
-        : (invoice.customerId ? Math.max(0, (state.customers.find(c => c.id == invoice.customerId)?.debt || 0) - invoice.remainingDebt) : 0);
-    const totalDebtBeforePayment = previousDebt + invoice.grandTotal;
+        : (invoice.customerId ? Number(state.customers.find(c => c.id == invoice.customerId)?.debt || 0) : 0);
+    const totalDebtBeforePayment = invoice.totalDebtBeforePayment !== undefined
+        ? Number(invoice.totalDebtBeforePayment)
+        : (previousDebt + Number(invoice.grandTotal || 0));
     const totalDebtAfterInvoice = invoice.totalDebtAfterInvoice !== undefined
         ? Number(invoice.totalDebtAfterInvoice)
-        : (previousDebt + invoice.remainingDebt);
+        : Math.max(0, totalDebtBeforePayment - Number(invoice.paidAmount || 0));
 
     root.innerHTML = `
         <div class="modal-backdrop active" id="current-modal-backdrop">
