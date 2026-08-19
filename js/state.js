@@ -442,12 +442,12 @@ class ERPState {
         this.save(STORAGE_KEYS.CART, this.cart);
     }
 
-    /* Checkout & Invoices */
-    checkout(checkoutData) {
+    /* Prepare Invoice Draft (Preview without modifying state or saving) */
+    prepareInvoiceDraft(checkoutData) {
         if (this.cart.length === 0) return null;
 
-        const totalCost = this.cart.reduce((sum, item) => sum + (item.buyPrice * item.qty), 0);
-        const subtotal = this.cart.reduce((sum, item) => sum + (item.unitPrice * item.qty), 0);
+        const totalCost = this.cart.reduce((sum, item) => sum + ((Number(item.buyPrice) || 0) * item.qty), 0);
+        const subtotal = this.cart.reduce((sum, item) => sum + ((Number(item.unitPrice) || 0) * item.qty), 0);
         const discount = Number(checkoutData.discount) || 0;
         const grandTotal = Math.max(0, subtotal - discount);
         const paidAmount = Number(checkoutData.paidAmount) || 0;
@@ -455,21 +455,20 @@ class ERPState {
         const netProfit = grandTotal - totalCost;
 
         // Customer debt metrics before and after invoice
-        const customer = checkoutData.customerId ? this.customers.find(c => c.id == checkoutData.customerId) : null;
+        const customer = checkoutData.customerId ? this.customers.find(c => String(c.id) === String(checkoutData.customerId)) : null;
         const previousDebt = customer ? Number(customer.debt) || 0 : 0;
         const totalDebtBeforePayment = previousDebt + grandTotal;
         const totalDebtAfterInvoice = Math.max(0, totalDebtBeforePayment - paidAmount);
 
         const invoiceNumber = 'INV-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
-
         const seller = this.currentUser || { id: 1, name: 'حسام حسني' };
 
-        const newInvoice = {
+        return {
             id: Date.now(),
             invoiceNumber,
-            customerName: checkoutData.customerName || 'عميل نقدي (كاش)',
+            customerName: checkoutData.customerName || (customer ? customer.name : 'عميل نقدي (كاش)'),
             customerId: checkoutData.customerId || null,
-            items: [...this.cart],
+            items: JSON.parse(JSON.stringify(this.cart)),
             subtotal,
             discount,
             grandTotal,
@@ -483,13 +482,61 @@ class ERPState {
             paymentMethod: checkoutData.paymentMethod || 'cash',
             createdAt: new Date().toLocaleString('ar-EG'),
             sellerId: seller.id,
+            sellerName: seller.name || 'حسام حسني',
+            isDraft: true
+        };
+    }
+
+    /* Checkout & Invoices */
+    checkout(checkoutData) {
+        const isPreDraft = checkoutData && checkoutData.isDraft && checkoutData.items;
+        const itemsToCheckout = isPreDraft ? checkoutData.items : this.cart;
+        if (!itemsToCheckout || itemsToCheckout.length === 0) return null;
+
+        const totalCost = isPreDraft ? checkoutData.totalCost : itemsToCheckout.reduce((sum, item) => sum + ((Number(item.buyPrice) || 0) * item.qty), 0);
+        const subtotal = isPreDraft ? checkoutData.subtotal : itemsToCheckout.reduce((sum, item) => sum + ((Number(item.unitPrice) || 0) * item.qty), 0);
+        const discount = Number(checkoutData.discount) || 0;
+        const grandTotal = isPreDraft ? checkoutData.grandTotal : Math.max(0, subtotal - discount);
+        const paidAmount = Number(checkoutData.paidAmount) || 0;
+        const remainingDebt = isPreDraft ? checkoutData.remainingDebt : Math.max(0, grandTotal - paidAmount);
+        const netProfit = isPreDraft ? checkoutData.netProfit : (grandTotal - totalCost);
+
+        // Customer debt metrics before and after invoice
+        const customer = checkoutData.customerId ? this.customers.find(c => String(c.id) === String(checkoutData.customerId)) : null;
+        const previousDebt = checkoutData.previousDebt !== undefined ? Number(checkoutData.previousDebt) : (customer ? Number(customer.debt) || 0 : 0);
+        const totalDebtBeforePayment = checkoutData.totalDebtBeforePayment !== undefined ? Number(checkoutData.totalDebtBeforePayment) : (previousDebt + grandTotal);
+        const totalDebtAfterInvoice = checkoutData.totalDebtAfterInvoice !== undefined ? Number(checkoutData.totalDebtAfterInvoice) : Math.max(0, totalDebtBeforePayment - paidAmount);
+
+        const invoiceNumber = checkoutData.invoiceNumber || ('INV-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000));
+
+        const seller = this.currentUser || { id: 1, name: 'حسام حسني' };
+
+        const newInvoice = {
+            id: checkoutData.id || Date.now(),
+            invoiceNumber,
+            customerName: checkoutData.customerName || (customer ? customer.name : 'عميل نقدي (كاش)'),
+            customerId: checkoutData.customerId || null,
+            items: JSON.parse(JSON.stringify(itemsToCheckout)),
+            subtotal,
+            discount,
+            grandTotal,
+            totalCost,
+            netProfit,
+            paidAmount,
+            remainingDebt,
+            previousDebt,
+            totalDebtBeforePayment,
+            totalDebtAfterInvoice,
+            paymentMethod: checkoutData.paymentMethod || 'cash',
+            createdAt: checkoutData.createdAt || new Date().toLocaleString('ar-EG'),
+            sellerId: seller.id,
             sellerName: seller.name || 'حسام حسني'
         };
 
         // Deduct inventory stock & update employee quota soldQty
         const sellerUserObj = this.users.find(u => u.id === seller.id);
 
-        this.cart.forEach(cartItem => {
+        itemsToCheckout.forEach(cartItem => {
             const product = this.products.find(p => p.id === cartItem.productId);
             if (product) {
                 product.stockPacks = Math.max(0, product.stockPacks - cartItem.qty);
@@ -524,7 +571,7 @@ class ERPState {
 
         // Build detailed notification for delegate sales, item sell prices, and discounts
         const lossItems = [];
-        const itemSummaries = this.cart.map(item => {
+        const itemSummaries = itemsToCheckout.map(item => {
             const product = this.products.find(p => p.id === item.productId);
             const catalogPrice = product ? (Number(product.sellPrice) || item.unitPrice) : item.unitPrice;
             const buyCost = product ? (Number(product.buyPrice) || Number(item.buyPrice) || 0) : (Number(item.buyPrice) || 0);

@@ -1016,7 +1016,7 @@ window.posProcessCheckout = () => {
     const discount     = Number(document.getElementById('pos-discount-input')?.value || 0);
     const paidAmount   = Number(document.getElementById('pos-paid-input')?.value || 0);
 
-    const invoice = state.checkout({
+    const draftInvoice = state.prepareInvoiceDraft({
         customerId,
         customerName: customerId ? customerText.split('(')[0].trim() : 'عميل نقدي (كاش)',
         discount,
@@ -1024,12 +1024,7 @@ window.posProcessCheckout = () => {
         paidAmount
     });
 
-    if (invoice) {
-        state.currentPOSPaid = undefined;
-        state.currentPOSPaidManual = false;
-        state.currentPOSDiscount = 0;
-        state.currentPOSCustomerId = '';
-        window.showInvoiceModal(invoice);
-        window.renderCurrentView();
+    if (draftInvoice) {
+        window.showInvoiceModal(draftInvoice, false);
     }
 };

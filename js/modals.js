@@ -1277,10 +1277,10 @@ window.openPaymentModal = openPaymentModal;
 // Track whether current invoice is "confirmed" (تم الإتمام)
 let _pendingInvoice = null;
 
-export function showInvoiceModal(invoice) {
-    // Store invoice data without saving yet - save happens only on "تم الإتمام"
+export function showInvoiceModal(invoice, isConfirmed = true) {
+    // Store invoice data
     _pendingInvoice = invoice;
-    _renderInvoiceModal(invoice, false);
+    _renderInvoiceModal(invoice, isConfirmed);
 }
 window.showInvoiceModal = showInvoiceModal;
 
@@ -1288,7 +1288,7 @@ window.showInvoiceModal = showInvoiceModal;
 window.showInvoiceByNumber = (invoiceNumber) => {
     const inv = state.invoices.find(i => String(i.invoiceNumber) === String(invoiceNumber));
     if (inv) {
-        window.showInvoiceModal(inv);
+        window.showInvoiceModal(inv, true);
     } else {
         alert('لم يتم العثور على هذه الفاتورة!');
     }
@@ -1317,10 +1317,10 @@ function _renderInvoiceModal(invoice, isConfirmed) {
                 <!-- Header -->
                 <div class="modal-header" style="background: #0f1524; border-bottom: 1px solid var(--border-color);">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <span style="background: #00c897; color: #000; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; font-size: 0.8rem;">✓</span>
+                        <span style="background: ${isConfirmed ? '#00c897' : 'var(--primary-orange)'}; color: #000; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; font-size: 0.8rem;">${isConfirmed ? '✓' : '🔍'}</span>
                         <div>
-                            <div style="font-weight: 900; color: #fff; font-size: 1.05rem;">تم حفظ وإتمام الفاتورة بنجاح</div>
-                            <div style="font-size: 0.75rem; color: var(--text-muted);">فاتورة رقم: ${invoice.invoiceNumber}</div>
+                            <div style="font-weight: 900; color: #fff; font-size: 1.05rem;">${isConfirmed ? 'تم حفظ وإتمام الفاتورة بنجاح' : 'معاينة ومراجعة الفاتورة قبل الحفظ'}</div>
+                            <div style="font-size: 0.75rem; color: ${isConfirmed ? 'var(--text-muted)' : 'var(--primary-orange)'};">فاتورة رقم: ${invoice.invoiceNumber} ${!isConfirmed ? '(مسودة لم تُحفظ بعد)' : ''}</div>
                         </div>
                     </div>
                     <button class="modal-close" onclick="window.closeInvoiceModal()">✕</button>
@@ -1433,29 +1433,52 @@ function _renderInvoiceModal(invoice, isConfirmed) {
                 </div>
 
                 <!-- Footer -->
-                <div class="modal-footer" style="justify-content: space-between;">
-                    <button class="btn-secondary" onclick="window.closeInvoiceModal()">إغلاق</button>
-                    <button class="btn-primary" style="background: #00c897; border: none; color: #000; min-width: 130px;" onclick="window.confirmInvoice()">
-                        ✓ يتم الحفظ
-                    </button>
+                <div class="modal-footer" style="${isConfirmed ? 'justify-content: flex-end;' : 'justify-content: space-between; gap: 0.75rem;'}">
+                    ${!isConfirmed ? `
+                        <button type="button" class="btn-secondary" style="border-color: rgba(239,68,68,0.4); color: var(--accent-red);" onclick="window.closeInvoiceModal()">
+                            ✕ إغلاق (إلغاء دون حفظ)
+                        </button>
+                        <button type="button" class="btn-primary" style="background: #00c897; border: none; color: #000; min-width: 150px; font-weight: 900;" onclick="window.confirmInvoice()">
+                            ✓ يتم الحفظ
+                        </button>
+                    ` : `
+                        <button type="button" class="btn-primary" style="min-width: 120px;" onclick="window.closeInvoiceModal()">
+                            إغلاق النافذة
+                        </button>
+                    `}
                 </div>
             </div>
         </div>
     `;
 }
 
-// Close without saving
+// Close without saving - if closing unconfirmed draft, nothing is committed
 window.closeInvoiceModal = () => {
+    _pendingInvoice = null;
     const backdrop = document.getElementById('current-modal-backdrop');
     if (backdrop) backdrop.remove();
-    // Note: invoice was already committed in state.checkout() - no extra action needed
 };
 
-// Confirm = just close (invoice already saved in checkout)
+// Confirm & save invoice into state, storage, and cloud
 window.confirmInvoice = () => {
-    _pendingInvoice = null;
-    window.closeInvoiceModal();
-    window.renderCurrentView();
+    if (!_pendingInvoice) return;
+
+    const savedInvoice = state.checkout(_pendingInvoice);
+    if (savedInvoice) {
+        state.currentPOSPaid = undefined;
+        state.currentPOSPaidManual = false;
+        state.currentPOSDiscount = 0;
+        state.currentPOSCustomerId = '';
+
+        // Re-render modal in confirmed state
+        _pendingInvoice = savedInvoice;
+        _renderInvoiceModal(savedInvoice, true);
+
+        // Update the POS view in background to reflect cleared cart
+        if (window.renderCurrentView) {
+            window.renderCurrentView();
+        }
+    }
 };
 
 /* ─── Invoice Export Helpers ──────────────────────────────────── */
