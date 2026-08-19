@@ -1254,24 +1254,127 @@ export function openPaymentModal(customerId) {
             <label class="form-label" style="font-weight: 800; color: var(--primary-orange);">المبلغ المسدد الآن بسند القبض (ج.م) *</label>
             <input type="number" id="m-pay-amount" class="form-control" placeholder="أدخل المبلغ المسدد (مثال: 5000)" value="${defaultVal}" min="1" step="any" autofocus required style="font-size: 1.1rem; font-weight: 800; color: var(--accent-teal);">
         </div>
+        <div class="form-group" style="margin-top: 0.75rem;">
+            <label class="form-label" style="font-size: 0.82rem; color: var(--text-muted); font-weight: 700;">البيان / تفاصيل السند (اختياري)</label>
+            <input type="text" id="m-pay-notes" class="form-control" placeholder="مثال: دفعة تحت الحساب نقداً / سداد جزء من المديونية...">
+        </div>
     `;
 
     openModalHTML(`💵 تسجيل سند قبض جديد (${customer.name})`, body, () => {
         const amountEl = document.getElementById('m-pay-amount');
         const amount = Number(amountEl?.value);
+        const notes = document.getElementById('m-pay-notes')?.value.trim() || 'سداد دفعة تحت الحساب نقداً';
+
         if (!amount || isNaN(amount) || amount <= 0) {
             alert('⚠️ يرجى إدخال مبلغ صحيح لسند القبض أكبر من 0 جنيه!');
             if (amountEl) amountEl.focus();
             return false;
         }
 
-        state.addCustomerPayment(customer.id, amount);
-        alert(`✅ تم حفظ سند القبض بنجاح بمبلغ ${amount.toLocaleString('ar-EG')} ج.م وتم توريدها فورياً لرصيد السيولة النقدية بالخزينة!`);
-        if (window.renderCurrentView) window.renderCurrentView();
+        const record = state.addCustomerPayment(customer.id, amount, notes);
+        if (record) {
+            if (window.renderCurrentView) window.renderCurrentView();
+            setTimeout(() => {
+                window.showPaymentReceiptModal(record);
+            }, 100);
+        }
         return true;
     }, 'تأكيد وحفظ سند القبض');
 }
 window.openPaymentModal = openPaymentModal;
+
+/* ─── Payment Receipt Slip Modal (معاينة وطباعة سند القبض) ─────── */
+window.showPaymentReceiptModal = (paymentIdOrObj) => {
+    let p = paymentIdOrObj;
+    if (typeof paymentIdOrObj === 'number' || typeof paymentIdOrObj === 'string') {
+        p = (state.customerPayments || []).find(item => String(item.id) === String(paymentIdOrObj) || item.voucherNumber === paymentIdOrObj);
+    }
+    if (!p) {
+        alert('لم يتم العثور على بيانات سند القبض!');
+        return;
+    }
+
+    setupModals();
+    const root = document.getElementById('modal-root');
+    root.innerHTML = `
+        <div class="modal-backdrop active" id="current-modal-backdrop">
+            <div class="modal-dialog" style="width: 520px; max-width: 96vw;">
+                <div class="modal-header" style="background: #0f1524; border-bottom: 1px solid var(--border-color);">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="background: #00c897; color: #000; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; font-size: 0.8rem;">✓</span>
+                        <div>
+                            <div style="font-weight: 900; color: #fff; font-size: 1.05rem;">سند قبض وتوريد نقدية</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted);">رقم السند: ${p.voucherNumber}</div>
+                        </div>
+                    </div>
+                    <button class="modal-close" onclick="window.closeCurrentModal()">✕</button>
+                </div>
+
+                <div class="modal-body" style="padding: 1.25rem;">
+                    <!-- Printable Receipt Slip -->
+                    <div class="invoice-receipt-card" id="printable-payment-receipt" style="background:#fff;color:#000;padding:1.25rem;border-radius:10px;font-family:inherit;">
+                        <div class="receipt-header" style="text-align:center;border-bottom:2px dashed #000;padding-bottom:0.75rem;margin-bottom:0.75rem;">
+                            <div style="font-size:1.15rem;font-weight:900;">🚬 مؤسسة الدخان والسجائر ERP</div>
+                            <div style="font-size:0.85rem;font-weight:800;margin-top:0.2rem;color:#1e293b;">سند قبض نقدية رسمي (إيصال استلام)</div>
+                            <div style="font-size:0.72rem;color:#64748b;margin-top:0.15rem;">س.ت: 104928 • هاتف: 01150551500</div>
+                        </div>
+
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.82rem;margin-bottom:0.75rem;">
+                            <div>رقم السند:<br><strong style="color:#d97706;font-size:0.95rem;">${p.voucherNumber}</strong></div>
+                            <div>التاريخ والوقت:<br><strong>${p.createdAt}</strong></div>
+                            <div style="grid-column:1/-1;">استلمنا من التاجر / العميل:<br><strong style="font-size:1rem;color:#000;">${p.customerName}</strong></div>
+                            <div style="grid-column:1/-1;">البيان والتفاصيل:<br><strong>${p.notes || 'سداد دفعة تحت الحساب نقدياً'}</strong></div>
+                        </div>
+
+                        <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;padding:0.75rem;margin:0.75rem 0;text-align:center;">
+                            <div style="font-size:0.8rem;color:#475569;font-weight:700;">المبلغ المقبوض والمسدد:</div>
+                            <div style="font-size:1.5rem;font-weight:900;color:#059669;margin-top:0.2rem;">
+                                ${Number(p.amount).toLocaleString('ar-EG')} ج.م
+                            </div>
+                        </div>
+
+                        <div style="font-size:0.82rem;display:flex;flex-direction:column;gap:0.35rem;border-top:1px dashed #cbd5e1;padding-top:0.6rem;margin-top:0.6rem;">
+                            <div class="flex-between">
+                                <span style="color:#64748b;">المديونية السابقة للعميل:</span>
+                                <strong>${Number(p.previousDebt || 0).toLocaleString('ar-EG')} ج.م</strong>
+                            </div>
+                            <div class="flex-between" style="font-weight:800;color:#dc2626;">
+                                <span>الرصيد المتبقي المستحق بعد السداد:</span>
+                                <strong style="font-size:0.95rem;">${Number(p.debtAfter || 0).toLocaleString('ar-EG')} ج.م</strong>
+                            </div>
+                        </div>
+
+                        <div style="margin-top:1.25rem;border-top:1px solid #e2e8f0;padding-top:0.75rem;display:flex;justify-content:space-between;font-size:0.78rem;">
+                            <div>المستلم / المحصل:<br><strong>${p.collectedBy || 'حسام حسني'}</strong></div>
+                            <div style="text-align:left;">توقيع المستلم:<br>....................</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer" style="display:flex;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;">
+                    <div style="display:flex;gap:0.4rem;">
+                        <button class="btn-primary" style="background:#3b82f6;border:none;" onclick="window.printPaymentReceipt()">
+                            🖨️ طباعة سند القبض
+                        </button>
+                        <button class="btn-secondary" style="color:#25d366;border-color:rgba(37,211,102,0.4);" onclick="window.sendPaymentReceiptWhatsapp('${p.voucherNumber}', '${p.customerName}', '${p.amount}', '${p.debtAfter}')">
+                            💬 إرسال واتساب
+                        </button>
+                    </div>
+                    <button class="btn-secondary" onclick="window.closeCurrentModal()">إغلاق</button>
+                </div>
+            </div>
+        </div>
+    `;
+};
+
+window.printPaymentReceipt = () => {
+    window.print();
+};
+
+window.sendPaymentReceiptWhatsapp = (voucherNum, customerName, amount, debtAfter) => {
+    const text = encodeURIComponent(`مرحباً أ/ ${customerName}، تم استلام دفعة مالية بمبلغ (${amount} ج.م) بموجب سند قبض رقم (${voucherNum}). الرصيد المتبقي المستحق طرفكم: (${debtAfter} ج.م). شكرًا لتعاملكم معنا.`);
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+};
 
 /* ─── Invoice Modal ─────────────────────────────────────────────── */
 // Track whether current invoice is "confirmed" (تم الإتمام)
@@ -1657,9 +1760,9 @@ export function openEditCustomerModal(customerId) {
 }
 window.openEditCustomerModal = openEditCustomerModal;
 
-/* ─── Customer Account Statement Modal (كشف حساب العميل) ─────────────────── */
-export function showCustomerStatement(customerId) {
-    const customer = state.customers.find(c => c.id === customerId);
+/* ─── Customer Account Statement Modal (كشف حساب العميل الشامل) ─────────── */
+export function showCustomerStatement(customerId, activeFilter = 'all') {
+    const customer = state.customers.find(c => String(c.id) === String(customerId));
     if (!customer) {
         alert('لم يتم العثور على بيانات هذا العميل!');
         return;
@@ -1668,19 +1771,65 @@ export function showCustomerStatement(customerId) {
     setupModals();
     const root = document.getElementById('modal-root');
 
-    // Filter invoices related to this customer
-    const customerInvoices = state.invoices.filter(inv => inv.customerId === customerId || inv.customerName === customer.name);
+    // 1. Invoices for this customer
+    const customerInvoices = (state.invoices || []).filter(inv => String(inv.customerId) === String(customerId) || inv.customerName === customer.name);
+
+    // 2. Standalone payment receipts (سندات القبض) for this customer
+    const customerPayments = (state.customerPayments || []).filter(p => String(p.customerId) === String(customerId) || p.customerName === customer.name);
+
+    // 3. Combine into unified ledger transactions
+    const invoiceTransactions = customerInvoices.map(inv => ({
+        type: 'invoice',
+        id: inv.id,
+        refNumber: inv.invoiceNumber,
+        date: inv.createdAt,
+        timestamp: inv.id || (inv.createdAt ? new Date(inv.createdAt).getTime() : 0) || 0,
+        description: (inv.items || []).map(i => `${i.name} (${i.qty} قروصة)`).join(' ، ') || 'فاتورة بضاعة ومبيعات',
+        paymentMethod: inv.paymentMethod === 'cash' ? 'نقدي (كاش)' : 'آجل/جزئي',
+        isCash: inv.paymentMethod === 'cash',
+        debit: Number(inv.grandTotal || 0),
+        credit: Number(inv.paidAmount || 0),
+        due: Number(inv.remainingDebt || 0),
+        raw: inv
+    }));
+
+    const paymentTransactions = customerPayments.map(p => ({
+        type: 'payment',
+        id: p.id,
+        refNumber: p.voucherNumber,
+        date: p.createdAt,
+        timestamp: p.id || (p.date ? new Date(p.date).getTime() : 0) || 0,
+        description: `${p.notes || 'سند قبض وتوريد نقدي'} (المستلم: ${p.collectedBy || 'حسام حسني'})`,
+        paymentMethod: 'سند قبض نقدي',
+        isCash: true,
+        debit: 0,
+        credit: Number(p.amount || 0),
+        due: Number(p.debtAfter || 0),
+        raw: p
+    }));
+
+    // Merge and sort newest first
+    let allTransactions = [...invoiceTransactions, ...paymentTransactions];
+    allTransactions.sort((a, b) => b.timestamp - a.timestamp);
+
+    // Apply active filter
+    let displayedTransactions = allTransactions;
+    if (activeFilter === 'invoices') {
+        displayedTransactions = invoiceTransactions.sort((a, b) => b.timestamp - a.timestamp);
+    } else if (activeFilter === 'payments') {
+        displayedTransactions = paymentTransactions.sort((a, b) => b.timestamp - a.timestamp);
+    }
 
     root.innerHTML = `
         <div class="modal-backdrop active" id="current-modal-backdrop">
-            <div class="modal-dialog" style="width: 720px; max-width: 96vw;">
+            <div class="modal-dialog" style="width: 820px; max-width: 96vw;">
                 <!-- Header -->
                 <div class="modal-header" style="background: #0f1524; border-bottom: 1px solid var(--border-color);">
                     <div>
                         <div style="font-weight: 900; color: #fff; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                             <span>📑</span> كشف حساب عميل: <span style="color: var(--primary-orange);">${customer.name}</span>
                             <button class="btn-primary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; background: var(--accent-teal); border: none;" onclick="window.openPaymentModal(${customer.id})">
-                                💵 تسجيل سند قبض
+                                💵 تسجيل سند قبض جديد
                             </button>
                             <button class="btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.78rem; border-color: var(--primary-orange); color: var(--primary-orange);" onclick="window.openEditCustomerModal(${customer.id})">
                                 ✏️ تعديل العميل
@@ -1698,60 +1847,95 @@ export function showCustomerStatement(customerId) {
                     <div id="printable-statement" style="background: #0d1424; padding: 1.25rem; border-radius: 14px; border: 1px solid var(--border-color);">
                         
                         <!-- Statement KPI Summary -->
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem; text-align: center;">
-                            <div style="background: #141b2d; padding: 0.75rem; border-radius: 10px; border: 1px solid var(--border-color);">
-                                <div style="font-size: 0.75rem; color: var(--text-muted);">إجمالي المشتريات</div>
-                                <div style="font-size: 1.1rem; font-weight: 900; color: #fff; margin-top: 0.2rem;">${(customer.totalPurchases || 0).toLocaleString('ar-EG')} ج.م</div>
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 1.25rem; text-align: center;">
+                            <div style="background: #141b2d; padding: 0.65rem 0.5rem; border-radius: 10px; border: 1px solid var(--border-color);">
+                                <div style="font-size: 0.72rem; color: var(--text-muted);">إجمالي المشتريات</div>
+                                <div style="font-size: 1.05rem; font-weight: 900; color: #fff; margin-top: 0.2rem;">${(customer.totalPurchases || 0).toLocaleString('ar-EG')} ج.م</div>
                             </div>
-                            <div style="background: #141b2d; padding: 0.75rem; border-radius: 10px; border: 1px solid var(--border-color);">
-                                <div style="font-size: 0.75rem; color: var(--text-muted);">إجمالي المبلغ المدفوع</div>
-                                <div style="font-size: 1.1rem; font-weight: 900; color: var(--accent-teal); margin-top: 0.2rem;">${(customer.paidAmount || 0).toLocaleString('ar-EG')} ج.م</div>
+                            <div style="background: #141b2d; padding: 0.65rem 0.5rem; border-radius: 10px; border: 1px solid var(--border-color);">
+                                <div style="font-size: 0.72rem; color: var(--text-muted);">إجمالي المدفوع (شامل السندات)</div>
+                                <div style="font-size: 1.05rem; font-weight: 900; color: var(--accent-teal); margin-top: 0.2rem;">${(customer.paidAmount || 0).toLocaleString('ar-EG')} ج.م</div>
                             </div>
-                            <div style="background: #141b2d; padding: 0.75rem; border-radius: 10px; border: 1px solid var(--border-color);">
-                                <div style="font-size: 0.75rem; color: var(--text-muted);">الرصيد المتبقي (الدين)</div>
-                                <div style="font-size: 1.1rem; font-weight: 900; color: var(--accent-red); margin-top: 0.2rem;">${(customer.debt || 0).toLocaleString('ar-EG')} ج.م</div>
+                            <div style="background: #141b2d; padding: 0.65rem 0.5rem; border-radius: 10px; border: 1px solid var(--border-color);">
+                                <div style="font-size: 0.72rem; color: var(--text-muted);">الرصيد المتبقي (الدين)</div>
+                                <div style="font-size: 1.05rem; font-weight: 900; color: var(--accent-red); margin-top: 0.2rem;">${(customer.debt || 0).toLocaleString('ar-EG')} ج.م</div>
                             </div>
+                            <div style="background: #141b2d; padding: 0.65rem 0.5rem; border-radius: 10px; border: 1px solid var(--border-color);">
+                                <div style="font-size: 0.72rem; color: var(--text-muted);">عدد الحركات</div>
+                                <div style="font-size: 1.05rem; font-weight: 900; color: var(--primary-orange); margin-top: 0.2rem;">${customerInvoices.length} فاتورة / ${customerPayments.length} سند</div>
+                            </div>
+                        </div>
+
+                        <!-- Statement Sub-Tabs Filter -->
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.6rem; flex-wrap: wrap;">
+                            <button type="button" class="btn-secondary ${activeFilter === 'all' ? 'active' : ''}" style="${activeFilter === 'all' ? 'background: var(--primary-orange); color: #000; font-weight: 800; border-color: var(--primary-orange);' : 'color: var(--text-muted);'} font-size: 0.8rem; padding: 0.35rem 0.8rem; border-radius: 8px;" onclick="window.showCustomerStatement(${customer.id}, 'all')">
+                                📊 كشف الحساب الشامل (${allTransactions.length})
+                            </button>
+                            <button type="button" class="btn-secondary ${activeFilter === 'invoices' ? 'active' : ''}" style="${activeFilter === 'invoices' ? 'background: var(--primary-orange); color: #000; font-weight: 800; border-color: var(--primary-orange);' : 'color: var(--text-muted);'} font-size: 0.8rem; padding: 0.35rem 0.8rem; border-radius: 8px;" onclick="window.showCustomerStatement(${customer.id}, 'invoices')">
+                                🛒 فواتير المبيعات (${customerInvoices.length})
+                            </button>
+                            <button type="button" class="btn-secondary ${activeFilter === 'payments' ? 'active' : ''}" style="${activeFilter === 'payments' ? 'background: var(--accent-teal); color: #000; font-weight: 800; border-color: var(--accent-teal);' : 'color: var(--text-muted);'} font-size: 0.8rem; padding: 0.35rem 0.8rem; border-radius: 8px;" onclick="window.showCustomerStatement(${customer.id}, 'payments')">
+                                💵 سندات القبض والدفعات (${customerPayments.length})
+                            </button>
                         </div>
 
                         <!-- Statement Transactions Table -->
-                        <div style="font-weight: 800; font-size: 0.95rem; color: #fff; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
-                            📜 سجل الفواتير والمعاملات المسجلة:
-                        </div>
-
-                        ${customerInvoices.length === 0 ? `
-                            <div style="text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.9rem; background: #0f1524; border-radius: 10px;">
-                                🛒 لا توجد فواتير مبيعات سابقة مسجلة لهذا العميل حتى الآن.
+                        ${displayedTransactions.length === 0 ? `
+                            <div style="text-align: center; padding: 2.5rem; color: var(--text-muted); font-size: 0.9rem; background: #0f1524; border-radius: 10px;">
+                                📜 لا توجد حركات مسجلة ضمن هذا التبويب حتى الآن.
                             </div>
                         ` : `
                             <div class="table-responsive">
-                                <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: right;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem; text-align: right;">
                                     <thead>
                                         <tr style="background: #141b2d; color: var(--text-muted); border-bottom: 1px solid var(--border-color);">
-                                            <th style="padding: 0.6rem 0.75rem;">التاريخ</th>
-                                            <th style="padding: 0.6rem 0.75rem;">رقم الفاتورة</th>
-                                            <th style="padding: 0.6rem 0.75rem;">طريقة الدفع</th>
-                                            <th style="padding: 0.6rem 0.75rem;">الأصناف</th>
-                                            <th style="padding: 0.6rem 0.75rem; text-align: left;">الإجمالي</th>
-                                            <th style="padding: 0.6rem 0.75rem; text-align: center;">عرض</th>
+                                            <th style="padding: 0.6rem 0.6rem;">التاريخ</th>
+                                            <th style="padding: 0.6rem 0.6rem;">نوع الحركة</th>
+                                            <th style="padding: 0.6rem 0.6rem;">رقم المعاملة</th>
+                                            <th style="padding: 0.6rem 0.6rem;">البيان والتفاصيل</th>
+                                            <th style="padding: 0.6rem 0.6rem; text-align: center;">المشتريات (+)</th>
+                                            <th style="padding: 0.6rem 0.6rem; text-align: center;">المسدد (-)</th>
+                                            <th style="padding: 0.6rem 0.6rem; text-align: center;">الرصيد/المتبقي</th>
+                                            <th style="padding: 0.6rem 0.6rem; text-align: center;">معاينة</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        ${customerInvoices.map(inv => `
-                                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); color: #fff; cursor: pointer; transition: background 0.15s ease;" onclick="window.showInvoiceByNumber('${inv.invoiceNumber}')" onmouseover="this.style.background='rgba(255,159,26,0.06)'" onmouseout="this.style.background=''">
-                                                <td style="padding: 0.6rem 0.75rem; font-size: 0.78rem; color: var(--text-muted);">${inv.createdAt}</td>
-                                                <td style="padding: 0.6rem 0.75rem; font-weight: 700; color: var(--primary-orange);">${inv.invoiceNumber}</td>
-                                                <td style="padding: 0.6rem 0.75rem;">
-                                                    <span class="badge ${inv.paymentMethod === 'cash' ? 'badge-teal' : 'badge-orange'}">
-                                                        ${inv.paymentMethod === 'cash' ? 'كاش' : 'آجل/جزئي'}
-                                                    </span>
+                                        ${displayedTransactions.map(t => `
+                                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); color: #fff; transition: background 0.15s ease;" onmouseover="this.style.background='rgba(255,159,26,0.06)'" onmouseout="this.style.background=''">
+                                                <td style="padding: 0.6rem 0.6rem; font-size: 0.75rem; color: var(--text-muted); white-space: nowrap;">${t.date}</td>
+                                                <td style="padding: 0.6rem 0.6rem; white-space: nowrap;">
+                                                    ${t.type === 'invoice' 
+                                                        ? `<span class="badge ${t.isCash ? 'badge-teal' : 'badge-orange'}" style="font-size:0.75rem;">🛒 فاتورة مبيعات</span>`
+                                                        : `<span class="badge badge-teal" style="font-size:0.75rem; background:rgba(0,200,151,0.15); color:#00c897; border:1px solid rgba(0,200,151,0.3);">💵 سند قبض</span>`
+                                                    }
                                                 </td>
-                                                <td style="padding: 0.6rem 0.75rem; font-size: 0.78rem; color: #cbd5e1;">
-                                                    ${(inv.items || []).map(i => `${i.name} (${i.qty} قروصة)`).join(' ، ')}
+                                                <td style="padding: 0.6rem 0.6rem; font-weight: 700; white-space: nowrap;">
+                                                    ${t.type === 'invoice'
+                                                        ? `<span style="color: var(--primary-orange); cursor: pointer; text-decoration: underline;" onclick="window.showInvoiceByNumber('${t.refNumber}')">${t.refNumber}</span>`
+                                                        : `<span style="color: var(--accent-teal); cursor: pointer; text-decoration: underline;" onclick="window.showPaymentReceiptModal(${t.id})">${t.refNumber}</span>`
+                                                    }
                                                 </td>
-                                                <td style="padding: 0.6rem 0.75rem; font-weight: 800; text-align: left; color: #fff;">
-                                                    ${(inv.grandTotal || 0).toLocaleString('ar-EG')} ج
+                                                <td style="padding: 0.6rem 0.6rem; font-size: 0.78rem; color: #cbd5e1; max-width: 200px;">
+                                                    ${t.description}
                                                 </td>
-                                                <td style="padding: 0.6rem 0.75rem; text-align: center; font-size: 1rem;" title="اضغط لعرض الفاتورة">👁️</td>
+                                                <td style="padding: 0.6rem 0.6rem; text-align: center; font-weight: 800; color: #fff; white-space: nowrap;">
+                                                    ${t.debit > 0 ? `${t.debit.toLocaleString('ar-EG')} ج` : '-'}
+                                                </td>
+                                                <td style="padding: 0.6rem 0.6rem; text-align: center; font-weight: 800; color: var(--accent-teal); white-space: nowrap;">
+                                                    ${t.credit > 0 ? `${t.credit.toLocaleString('ar-EG')} ج` : '-'}
+                                                </td>
+                                                <td style="padding: 0.6rem 0.6rem; text-align: center; white-space: nowrap;">
+                                                    ${t.type === 'invoice' 
+                                                        ? (t.due > 0 ? `<span style="color: var(--accent-red); font-weight: 700;">آجل: ${t.due.toLocaleString('ar-EG')} ج</span>` : '<span style="color: var(--accent-teal); font-size:0.75rem;">مسددة بالكامل</span>')
+                                                        : `<span style="color: ${t.due > 0 ? 'var(--accent-red)' : 'var(--accent-teal)'}; font-weight: 700;">الباقي: ${t.due.toLocaleString('ar-EG')} ج</span>`
+                                                    }
+                                                </td>
+                                                <td style="padding: 0.6rem 0.6rem; text-align: center; font-size: 1rem;">
+                                                    ${t.type === 'invoice'
+                                                        ? `<button type="button" style="background:none; border:none; cursor:pointer; font-size:1.05rem;" title="عرض تفاصيل الفاتورة" onclick="window.showInvoiceByNumber('${t.refNumber}')">👁️</button>`
+                                                        : `<button type="button" style="background:none; border:none; cursor:pointer; font-size:1.05rem;" title="معاينة وطباعة سند القبض" onclick="window.showPaymentReceiptModal(${t.id})">🧾</button>`
+                                                    }
+                                                </td>
                                             </tr>
                                         `).join('')}
                                     </tbody>

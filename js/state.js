@@ -15,7 +15,8 @@ const STORAGE_KEYS = {
     CART: 'hussam_erp_cart_v2.5',
     CURRENT_USER: 'hussam_erp_current_user_v2.5',
     CASH_ON_HAND: 'hussam_erp_cash_on_hand_v2.5',
-    DELEGATE_COLLECTIONS: 'hussam_erp_delegate_collections_v2.5'
+    DELEGATE_COLLECTIONS: 'hussam_erp_delegate_collections_v2.5',
+    CUSTOMER_PAYMENTS: 'hussam_erp_customer_payments_v2.5'
 };
 
 class ERPState {
@@ -95,6 +96,7 @@ class ERPState {
         this.cart = this.load(STORAGE_KEYS.CART, []);
         this.cashOnHand = this.load(STORAGE_KEYS.CASH_ON_HAND, 60);
         this.delegateCollections = this.load(STORAGE_KEYS.DELEGATE_COLLECTIONS, []);
+        this.customerPayments = this.load(STORAGE_KEYS.CUSTOMER_PAYMENTS, []);
         this.activeView = 'dashboard';
         this.currentPOSCustomerId = '';
         this.listeners = [];
@@ -153,6 +155,7 @@ class ERPState {
             case STORAGE_KEYS.CURRENT_USER:        this.currentUser = value;     break;
             case STORAGE_KEYS.CASH_ON_HAND:        this.cashOnHand = value;      break;
             case STORAGE_KEYS.DELEGATE_COLLECTIONS: this.delegateCollections = value || []; break;
+            case STORAGE_KEYS.CUSTOMER_PAYMENTS:    this.customerPayments = value || [];   break;
         }
     }
 
@@ -347,14 +350,17 @@ class ERPState {
         return newCustomer;
     }
 
-    addCustomerPayment(customerId, amount) {
+    addCustomerPayment(customerId, amount, notes = '') {
         const customer = this.customers.find(c => String(c.id) === String(customerId));
         if (customer) {
             const pay = Number(amount) || 0;
-            if (pay <= 0) return;
+            if (pay <= 0) return null;
+
+            const previousDebt = Number(customer.debt) || 0;
+            const debtAfter = Math.max(0, previousDebt - pay);
 
             customer.paidAmount = (Number(customer.paidAmount) || 0) + pay;
-            customer.debt = Math.max(0, (Number(customer.debt) || 0) - pay);
+            customer.debt = debtAfter;
             customer.lastPaymentDate = new Date().toISOString().split('T')[0];
             this.save(STORAGE_KEYS.CUSTOMERS, this.customers);
 
@@ -369,14 +375,67 @@ class ERPState {
                 this.updateCashOnHand((Number(this.cashOnHand) || 0) + pay);
             }
 
+            // Create Payment Receipt Record
+            const voucherNumber = 'PAY-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
+            const paymentRecord = {
+                id: Date.now(),
+                voucherNumber,
+                customerId: customer.id,
+                customerName: customer.name,
+                amount: pay,
+                previousDebt,
+                debtAfter,
+                notes: notes || 'سند قبض وتوريد نقدي',
+                collectedBy: (sellerUser && sellerUser.name) ? sellerUser.name : (this.currentUser ? this.currentUser.name : 'حسام حسني'),
+                collectorId: (sellerUser && sellerUser.id) ? sellerUser.id : 1,
+                createdAt: new Date().toLocaleString('ar-EG'),
+                date: new Date().toISOString()
+            };
+
+            if (!Array.isArray(this.customerPayments)) {
+                this.customerPayments = [];
+            }
+            this.customerPayments.unshift(paymentRecord);
+            this.save(STORAGE_KEYS.CUSTOMER_PAYMENTS, this.customerPayments);
+
             this.addNotification({
                 title: `💵 تسجيل سند قبض جديد (${customer.name})`,
-                message: `تم تسليم مبلغ ${pay.toLocaleString('ar-EG')} ج.م من العميل (${customer.name}) ${isDelegate ? `بواسطة المندوب (${sellerUser.name}) وإضافتها لعهدته` : 'وتوريدها فورياً للخزينة الرئيسية'}.`,
+                message: `تم تسليم مبلغ ${pay.toLocaleString('ar-EG')} ج.م من العميل (${customer.name}) ${isDelegate ? `بواسطة المندوب (${sellerUser.name}) وإضافتها لعهدته` : 'وتوريدها فورياً للخزينة الرئيسية'}. رقم السند: ${voucherNumber}`,
                 type: 'info'
             });
 
             this.notify();
+            return paymentRecord;
         }
+        return null;
+    }
+
+    deleteCustomerPayment(paymentId) {
+        if (!Array.isArray(this.customerPayments)) return false;
+        const p = this.customerPayments.find(item => String(item.id) === String(paymentId) || item.voucherNumber === paymentId);
+        if (!p) return false;
+
+        const customer = this.customers.find(c => String(c.id) === String(p.customerId));
+        if (customer) {
+            customer.debt = (Number(customer.debt) || 0) + (Number(p.amount) || 0);
+            customer.paidAmount = Math.max(0, (Number(customer.paidAmount) || 0) - (Number(p.amount) || 0));
+            this.save(STORAGE_KEYS.CUSTOMERS, this.customers);
+        }
+
+        // Deduct from cash
+        const collector = this.users.find(u => u.id === p.collectorId);
+        const isDelegate = collector && collector.role !== 'مدير عام' && collector.id !== 1;
+        if (isDelegate) {
+            collector.delegateCashHand = Math.max(0, (Number(collector.delegateCashHand) || 0) - (Number(p.amount) || 0));
+            this.save(STORAGE_KEYS.USERS, this.users);
+        } else {
+            this.updateCashOnHand(Math.max(0, (Number(this.cashOnHand) || 0) - (Number(p.amount) || 0)));
+        }
+
+        this.customerPayments = this.customerPayments.filter(item => String(item.id) !== String(paymentId) && item.voucherNumber !== paymentId);
+        this.save(STORAGE_KEYS.CUSTOMER_PAYMENTS, this.customerPayments);
+        this.notify();
+        return true;
     }
 
     deleteCustomer(id) {
