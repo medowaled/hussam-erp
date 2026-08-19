@@ -2,16 +2,29 @@ import { state } from '../state.js';
 
 let activeReportTab = 'position';
 let activeSellerFilter = 'all';
+let reportSearchQuery = '';
 
 export function renderReportsView() {
     const allInvoices = state.invoices;
     const customers = state.customers;
     const users = state.users;
+    const q = (reportSearchQuery || '').trim().toLowerCase();
 
-    // Filter invoices by seller if selected
+    // Filter invoices by seller and search query (invoice number, customer name, seller name, items, ID)
     const invoices = allInvoices.filter(inv => {
-        if (activeSellerFilter === 'all') return true;
-        return String(inv.sellerId) === String(activeSellerFilter) || inv.sellerName === activeSellerFilter;
+        const matchesSeller = (activeSellerFilter === 'all') ||
+            (String(inv.sellerId) === String(activeSellerFilter) || inv.sellerName === activeSellerFilter);
+        if (!matchesSeller) return false;
+
+        if (!q) return true;
+
+        const invNum = inv.invoiceNumber ? String(inv.invoiceNumber).toLowerCase() : '';
+        const idStr = String(inv.id || '');
+        const custName = inv.customerName ? String(inv.customerName).toLowerCase() : '';
+        const sellerName = inv.sellerName ? String(inv.sellerName).toLowerCase() : '';
+        const itemNames = Array.isArray(inv.items) ? inv.items.map(i => i.name ? String(i.name).toLowerCase() : '').join(' ') : '';
+
+        return invNum.includes(q) || idStr.includes(q) || custName.includes(q) || sellerName.includes(q) || itemNames.includes(q);
     });
 
     const selectedSeller = activeSellerFilter !== 'all' ? users.find(u => String(u.id) === String(activeSellerFilter)) : null;
@@ -31,8 +44,17 @@ export function renderReportsView() {
     const mainCash = Number(state.cashOnHand) || 0;
     const delegatesCash = state.getDelegatesTotalCash();
 
-    // Delegate Collections
-    const sellerCollections = state.getDelegateCollections(activeSellerFilter);
+    // Delegate Collections filtered by search query
+    const allSellerCollections = state.getDelegateCollections(activeSellerFilter);
+    const sellerCollections = allSellerCollections.filter(v => {
+        if (!q) return true;
+        const vNum = v.voucherNumber ? String(v.voucherNumber).toLowerCase() : '';
+        const vId = String(v.id || '');
+        const dName = v.delegateName ? String(v.delegateName).toLowerCase() : '';
+        const cBy = v.collectedBy ? String(v.collectedBy).toLowerCase() : '';
+        const notes = v.notes ? String(v.notes).toLowerCase() : '';
+        return vNum.includes(q) || vId.includes(q) || dName.includes(q) || cBy.includes(q) || notes.includes(q);
+    });
     const totalSellerCollections = state.getTotalDelegateCollections(activeSellerFilter);
 
     const totalRevenue = invoices.reduce((sum, inv) => sum + (Number(inv.grandTotal) || 0), 0);
@@ -140,17 +162,33 @@ export function renderReportsView() {
                     </button>
                 </div>
 
-                <!-- Seller Filter Dropdown -->
-                <div style="display:flex;align-items:center;gap:0.5rem;">
-                    <label style="font-size:0.82rem;font-weight:800;color:var(--primary-orange);">👤 تصفية بحسب المندوب/البائع:</label>
-                    <select class="form-control" style="width:180px;padding:0.3rem 0.6rem;font-size:0.85rem;height:36px;" onchange="window.setSellerFilter(this.value)">
-                        <option value="all" ${activeSellerFilter === 'all' ? 'selected' : ''}>🌐 الجميع (كافة الموظفين)</option>
-                        ${users.map(u => `
-                            <option value="${u.id}" ${String(activeSellerFilter) === String(u.id) ? 'selected' : ''}>
-                                ${u.name} (${u.role || 'موظف'})
-                            </option>
-                        `).join('')}
-                    </select>
+                <!-- Search & Filter Controls -->
+                <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                    <!-- Invoice / Customer / Delegate Search Box -->
+                    <div class="search-box" style="width:280px;min-width:220px;flex:1;">
+                        <input
+                            type="text"
+                            id="reports-search-input"
+                            placeholder="🔍 ابحث برقم الفاتورة (مثال: INV-2026) أو العميل..."
+                            value="${reportSearchQuery}"
+                            oninput="window.setReportSearchQuery(this.value)"
+                            style="width:100%;font-size:0.85rem;"
+                        >
+                        <span class="search-icon">🔍</span>
+                    </div>
+
+                    <!-- Seller Filter Dropdown -->
+                    <div style="display:flex;align-items:center;gap:0.4rem;">
+                        <label style="font-size:0.82rem;font-weight:800;color:var(--primary-orange);white-space:nowrap;">👤 المندوب:</label>
+                        <select class="form-control" style="width:160px;padding:0.3rem 0.6rem;font-size:0.85rem;height:36px;" onchange="window.setSellerFilter(this.value)">
+                            <option value="all" ${activeSellerFilter === 'all' ? 'selected' : ''}>🌐 الجميع (كافة الموظفين)</option>
+                            ${users.map(u => `
+                                <option value="${u.id}" ${String(activeSellerFilter) === String(u.id) ? 'selected' : ''}>
+                                    ${u.name} (${u.role || 'موظف'})
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -326,20 +364,34 @@ export function setReportTab(tab) {
 }
 window.setReportTab = setReportTab;
 
+export function setReportSearchQuery(query) {
+    reportSearchQuery = query || '';
+    window.renderCurrentView();
+    const input = document.getElementById('reports-search-input');
+    if (input) {
+        input.focus();
+        const len = input.value.length;
+        input.setSelectionRange(len, len);
+    }
+}
+window.setReportSearchQuery = setReportSearchQuery;
+
 window.setSellerFilter = (sellerId) => {
     activeSellerFilter = sellerId;
     window.renderCurrentView();
 };
 
 window.reprintInvoice = (id) => {
-    const invoice = state.invoices.find(inv => inv.id === id);
+    const invoice = state.invoices.find(inv => String(inv.id) === String(id) || inv.invoiceNumber === id);
     if (invoice) {
         window.showInvoiceModal(invoice);
+    } else {
+        alert('لم يتم العثور على هذه الفاتورة!');
     }
 };
 
 window.deleteInvoiceHandler = (id) => {
-    if (confirm('هل أنت تأكد من حذف هذه الفاتورة؟ لن يؤثر حذفها سلباً على بقية أصناف المخزون.')) {
+    if (confirm('هل أنت متأكد من حذف هذه الفاتورة؟ لن يؤثر حذفها سلباً على بقية أصناف المخزون.')) {
         state.deleteInvoice(id);
         window.renderCurrentView();
     }

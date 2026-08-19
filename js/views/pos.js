@@ -197,17 +197,153 @@ export function renderPosView() {
     return renderMainPosView(user);
 }
 
+function getFilteredMainProducts(category, query) {
+    const q = (query || '').trim().toLowerCase();
+    return state.products.filter(p => {
+        const matchesCategory = category === 'الكل' || p.category === category;
+        const nameMatch = p.name ? p.name.toLowerCase().includes(q) : false;
+        const barcodeMatch = p.barcode ? String(p.barcode).toLowerCase().includes(q) : false;
+        return matchesCategory && (!q || nameMatch || barcodeMatch);
+    });
+}
+
+function getFilteredEmployeeProducts(empId, category, query) {
+    const emp = state.users.find(u => u.id === empId) || state.currentUser;
+    const allocatedProducts = state.products.filter(p => {
+        const quota = state.getEmployeeQuota(emp.id, p.id);
+        if (quota.isUnlimited) return true;
+        return quota.allocatedQty > 0;
+    });
+    const q = (query || '').trim().toLowerCase();
+    return allocatedProducts.filter(p => {
+        const matchesCategory = category === 'الكل' || p.category === category;
+        const nameMatch = p.name ? p.name.toLowerCase().includes(q) : false;
+        const barcodeMatch = p.barcode ? String(p.barcode).toLowerCase().includes(q) : false;
+        return matchesCategory && (!q || nameMatch || barcodeMatch);
+    });
+}
+
+function renderMainProductsGridHtml() {
+    const products = getFilteredMainProducts(activeCategory, searchQuery);
+    if (products.length === 0) {
+        return `
+            <div class="empty-table-state" style="grid-column:1/-1;padding:3rem 1rem;">
+                <i>📦</i>
+                <p style="font-size:1rem;font-weight:700;">لا توجد أصناف تطابق البحث "${searchQuery || ''}"</p>
+                <button class="btn-primary" style="margin-top:1rem;" onclick="window.openAddProductModal()">
+                    + إضافة صنف للمخزن الآن
+                </button>
+            </div>
+        `;
+    }
+    return products.map(p => `
+        <div class="product-card">
+            <div>
+                <div class="product-card-top">
+                    <span class="product-code-pill">${p.barcode}</span>
+                    <div style="font-size:0.7rem;color:var(--text-muted);">box</div>
+                </div>
+                <div class="product-title-text" style="margin:0.4rem 0 0.35rem;">${p.name}</div>
+                <div class="product-info-row">
+                    <span class="info-label">سعر القروصة:</span>
+                    <span class="info-value" style="color:var(--primary-orange);">${p.sellPrice} ج.م</span>
+                </div>
+                <div class="product-info-row">
+                    <span class="info-label">المتاح بالمخزن:</span>
+                    <span class="info-value" style="color:${p.stockPacks <= p.minStockPacks ? 'var(--accent-red)' : 'var(--accent-teal)'};">
+                        ${p.stockPacks} قروصة
+                    </span>
+                </div>
+            </div>
+            <button
+                class="btn-add-item-green"
+                style="${p.stockPacks <= 0 ? 'background:#374151;color:#9ca3af;cursor:not-allowed;' : ''}"
+                onclick="window.posAddToCart(${p.id})">
+                ${p.stockPacks <= 0 ? '⚠️ نافد من المخزن' : `+ إضافة (1 قروصة) بسعر ${p.sellPrice} ج`}
+            </button>
+        </div>
+    `).join('');
+}
+
+function renderEmployeeProductsGridHtml(empId) {
+    const emp = state.users.find(u => u.id === empId) || state.currentUser;
+    const allocatedProducts = state.products.filter(p => {
+        const quota = state.getEmployeeQuota(emp.id, p.id);
+        if (quota.isUnlimited) return true;
+        return quota.allocatedQty > 0;
+    });
+
+    if (allocatedProducts.length === 0) {
+        return `
+            <div class="empty-quota-warning-card" style="grid-column:1/-1;">
+                <div class="warning-icon-large">⚠️</div>
+                <div class="warning-title-text">لم يتم تخصيص أصناف أو عهدة لهذا الموظف حتى الآن</div>
+                <div class="warning-sub-text">
+                    يرجى التواصل مع المدير العام (حسام حسني) لتخصيص أصناف وبضاعة ومحلات للموظف من خيار "تخصيص الصلاحيات والعهد".
+                </div>
+            </div>
+        `;
+    }
+
+    const products = getFilteredEmployeeProducts(empId, activeCategory, searchQuery);
+    if (products.length === 0) {
+        return `
+            <div class="empty-table-state" style="grid-column:1/-1;padding:3rem 1rem;">
+                <i>📦</i>
+                <p style="font-size:1rem;font-weight:700;">لا توجد أصناف تطابق البحث "${searchQuery || ''}"</p>
+            </div>
+        `;
+    }
+
+    return products.map(p => {
+        const quota = state.getEmployeeQuota(emp.id, p.id);
+        const isStockEmpty = p.stockPacks <= 0;
+        const isQuotaEmpty = !quota.isUnlimited && quota.remainingQty <= 0;
+
+        let statusBadge = '';
+        if (isStockEmpty) {
+            statusBadge = `<span style="color:var(--accent-red);font-weight:800;font-size:0.75rem;">⚠️ المخزن الرئيسي فارغ</span>`;
+        } else if (isQuotaEmpty) {
+            statusBadge = `<span style="color:var(--accent-red);font-weight:800;font-size:0.75rem;">⚠️ نفذت عهدتك المخصصة</span>`;
+        } else if (!quota.isUnlimited) {
+            statusBadge = `<span style="color:var(--accent-teal);font-weight:800;font-size:0.78rem;">عهدتك: ${quota.remainingQty} / ${quota.allocatedQty} قروصة</span>`;
+        } else {
+            statusBadge = `<span style="color:var(--accent-teal);font-weight:800;font-size:0.82rem;">${p.stockPacks} قروصة بالمخزن</span>`;
+        }
+
+        return `
+            <div class="product-card" style="${isStockEmpty || isQuotaEmpty ? 'opacity:0.75;' : ''}">
+                <div>
+                    <div class="product-card-top">
+                        <span class="product-code-pill">${p.barcode}</span>
+                        <div style="font-size:0.7rem;color:var(--text-muted);">box</div>
+                    </div>
+                    <div class="product-title-text" style="margin:0.4rem 0 0.35rem;">${p.name}</div>
+                    <div class="product-info-row">
+                        <span class="info-label">سعر القروصة:</span>
+                        <span class="info-value" style="color:var(--primary-orange);">${p.sellPrice} ج.م</span>
+                    </div>
+                    <div class="product-info-row">
+                        <span class="info-label">المتاح للبيع:</span>
+                        <span class="info-value">${statusBadge}</span>
+                    </div>
+                </div>
+                <button
+                    class="btn-add-item-green"
+                    style="${isStockEmpty || isQuotaEmpty ? 'background:#374151;color:#9ca3af;cursor:not-allowed;' : ''}"
+                    onclick="window.posAddToCart(${p.id})">
+                    ${isStockEmpty ? '⚠️ بالمخزن 0' : isQuotaEmpty ? '⚠️ عهدتك انتهت' : `+ إضافة (1 قروصة) بسعر ${p.sellPrice} ج`}
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
 /* ─── 1. Main POS View ────────────────────────────────────────── */
 function renderMainPosView(user) {
     const nonAdminEmployees = state.users.filter(u => u.id !== 1 && u.role !== 'مدير عام');
     const availableCustomers = state.customers;
     const selectedCustomerId = state.currentPOSCustomerId || '';
-
-    const products = state.products.filter(p => {
-        const matchesCategory = activeCategory === 'الكل' || p.category === activeCategory;
-        const matchesSearch = p.name.includes(searchQuery) || (p.barcode && p.barcode.includes(searchQuery));
-        return matchesCategory && matchesSearch;
-    });
 
     const cartItems = state.cart;
     const subtotal = cartItems.reduce((sum, item) => sum + (item.unitPrice * item.qty), 0);
@@ -250,9 +386,12 @@ function renderMainPosView(user) {
                     <div class="search-box" style="flex:1;">
                         <input
                             type="text"
+                            id="pos-search-input"
                             placeholder="ابحث بالاسم، الماركة، أو امسح الباركود..."
                             value="${searchQuery}"
                             oninput="window.posSearchInput(this.value)"
+                            onkeydown="window.posSearchKeydown(event)"
+                            autocomplete="off"
                             style="width:100%;"
                         >
                         <span class="search-icon">🔍</span>
@@ -269,41 +408,7 @@ function renderMainPosView(user) {
 
                 <!-- Products Grid -->
                 <div class="products-grid">
-                    ${products.length === 0 ? `
-                        <div class="empty-table-state" style="grid-column:1/-1;padding:3rem 1rem;">
-                            <i>📦</i>
-                            <p style="font-size:1rem;font-weight:700;">لا توجد أصناف تطابق البحث</p>
-                            <button class="btn-primary" style="margin-top:1rem;" onclick="window.openAddProductModal()">
-                                + إضافة صنف للمخزن الآن
-                            </button>
-                        </div>
-                    ` : products.map(p => `
-                        <div class="product-card">
-                            <div>
-                                <div class="product-card-top">
-                                    <span class="product-code-pill">${p.barcode}</span>
-                                    <div style="font-size:0.7rem;color:var(--text-muted);">box</div>
-                                </div>
-                                <div class="product-title-text" style="margin:0.4rem 0 0.35rem;">${p.name}</div>
-                                <div class="product-info-row">
-                                    <span class="info-label">سعر القروصة:</span>
-                                    <span class="info-value" style="color:var(--primary-orange);">${p.sellPrice} ج.م</span>
-                                </div>
-                                <div class="product-info-row">
-                                    <span class="info-label">المتاح بالمخزن:</span>
-                                    <span class="info-value" style="color:${p.stockPacks <= p.minStockPacks ? 'var(--accent-red)' : 'var(--accent-teal)'};">
-                                        ${p.stockPacks} قروصة
-                                    </span>
-                                </div>
-                            </div>
-                            <button
-                                class="btn-add-item-green"
-                                style="${p.stockPacks <= 0 ? 'background:#374151;color:#9ca3af;cursor:not-allowed;' : ''}"
-                                onclick="window.posAddToCart(${p.id})">
-                                ${p.stockPacks <= 0 ? '⚠️ نافد من المخزن' : `+ إضافة (1 قروصة) بسعر ${p.sellPrice} ج`}
-                            </button>
-                        </div>
-                    `).join('')}
+                    ${renderMainProductsGridHtml()}
                 </div>
             </div>
 
@@ -580,9 +685,12 @@ function renderDedicatedEmployeePosView(empId, isEnteredByAdmin = false) {
                     <div class="search-box" style="flex:1;">
                         <input
                             type="text"
+                            id="pos-search-input"
                             placeholder="ابحث بالاسم، الماركة، أو امسح الباركود..."
                             value="${searchQuery}"
                             oninput="window.posSearchInput(this.value)"
+                            onkeydown="window.posSearchKeydown(event)"
+                            autocomplete="off"
                             style="width:100%;"
                         >
                         <span class="search-icon">🔍</span>
@@ -598,60 +706,9 @@ function renderDedicatedEmployeePosView(empId, isEnteredByAdmin = false) {
                 </div>
 
                 <!-- Products Grid / Empty Warning (Exact match to Screenshot 3) -->
-                ${allocatedProducts.length === 0 ? `
-                    <div class="empty-quota-warning-card">
-                        <div class="warning-icon-large">⚠️</div>
-                        <div class="warning-title-text">لم يتم تخصيص أصناف أو عهدة لهذا الموظف حتى الآن</div>
-                        <div class="warning-sub-text">
-                            يرجى التواصل مع المدير العام (حسام حسني) لتخصيص أصناف وبضاعة ومحلات للموظف من خيار "تخصيص الصلاحيات والعهد".
-                        </div>
-                    </div>
-                ` : `
-                    <div class="products-grid">
-                        ${products.map(p => {
-                            const quota = state.getEmployeeQuota(emp.id, p.id);
-                            const isStockEmpty = p.stockPacks <= 0;
-                            const isQuotaEmpty = !quota.isUnlimited && quota.remainingQty <= 0;
-
-                            let statusBadge = '';
-                            if (isStockEmpty) {
-                                statusBadge = `<span style="color:var(--accent-red);font-weight:800;font-size:0.75rem;">⚠️ المخزن الرئيسي فارغ</span>`;
-                            } else if (isQuotaEmpty) {
-                                statusBadge = `<span style="color:var(--accent-red);font-weight:800;font-size:0.75rem;">⚠️ نفذت عهدتك المخصصة</span>`;
-                            } else if (!quota.isUnlimited) {
-                                statusBadge = `<span style="color:var(--accent-teal);font-weight:800;font-size:0.78rem;">عهدتك: ${quota.remainingQty} / ${quota.allocatedQty} قروصة</span>`;
-                            } else {
-                                statusBadge = `<span style="color:var(--accent-teal);font-weight:800;font-size:0.82rem;">${p.stockPacks} قروصة بالمخزن</span>`;
-                            }
-
-                            return `
-                                <div class="product-card" style="${isStockEmpty || isQuotaEmpty ? 'opacity:0.75;' : ''}">
-                                    <div>
-                                        <div class="product-card-top">
-                                            <span class="product-code-pill">${p.barcode}</span>
-                                            <div style="font-size:0.7rem;color:var(--text-muted);">box</div>
-                                        </div>
-                                        <div class="product-title-text" style="margin:0.4rem 0 0.35rem;">${p.name}</div>
-                                        <div class="product-info-row">
-                                            <span class="info-label">سعر القروصة:</span>
-                                            <span class="info-value" style="color:var(--primary-orange);">${p.sellPrice} ج.م</span>
-                                        </div>
-                                        <div class="product-info-row">
-                                            <span class="info-label">المتاح للبيع:</span>
-                                            <span class="info-value">${statusBadge}</span>
-                                        </div>
-                                    </div>
-                                    <button
-                                        class="btn-add-item-green"
-                                        style="${isStockEmpty || isQuotaEmpty ? 'background:#374151;color:#9ca3af;cursor:not-allowed;' : ''}"
-                                        onclick="window.posAddToCart(${p.id})">
-                                        ${isStockEmpty ? '⚠️ بالمخزن 0' : isQuotaEmpty ? '⚠️ عهدتك انتهت' : `+ إضافة (1 قروصة) بسعر ${p.sellPrice} ج`}
-                                    </button>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                `}
+                <div class="products-grid">
+                    ${renderEmployeeProductsGridHtml(emp.id)}
+                </div>
             </div>
 
             <!-- ═══ COLUMN 2 in DOM = LEFT side in RTL: Cart / Invoice ═══ -->
@@ -665,11 +722,15 @@ function renderDedicatedEmployeePosView(empId, isEnteredByAdmin = false) {
                     </div>
                 </div>
 
-                <!-- Customer Selector -->
-                <div style="margin-bottom:0.85rem;">
-                    <label class="form-label" style="font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">اختر العميل المشتري *</label>
+                <!-- Customer Selection Header -->
+                <div class="cart-customer-box">
+                    <div class="flex-between" style="margin-bottom:0.4rem;">
+                        <label class="cart-customer-label">👤 العميل صاحب الفاتورة:</label>
+                        <button type="button" class="btn-new-cust-link" onclick="window.openAddCustomerModal()">+ عميل جديد</button>
+                    </div>
+
                     <select class="form-control" id="pos-customer-select" style="font-size:0.82rem;" onchange="window.posOnCustomerSelectChange(this.value)">
-                        <option value="" ${!selectedCustomerId ? 'selected' : ''}>-- بيع مباشر لعميل كاش نقدي --</option>
+                        <option value="">-- عميل نقدي (كاش فوري) --</option>
                         ${availableCustomers.map(c => `
                             <option value="${c.id}" ${String(c.id) === String(selectedCustomerId) ? 'selected' : ''}>${c.name} (${c.shopName || 'تاجر'}) - مدين سابقاً: ${c.debt} ج.م</option>
                         `).join('')}
@@ -719,12 +780,53 @@ window.posExitEmployeePos = () => {
 
 window.posSetCategory = (cat) => {
     activeCategory = cat;
-    window.renderCurrentView();
+    document.querySelectorAll('.category-filter-pills .category-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.trim() === cat);
+    });
+    const grid = document.querySelector('.pos-products-section .products-grid');
+    if (grid) {
+        const user = state.currentUser || { id: 1, role: 'مدير عام', permissions: ['all'] };
+        const isAdmin = user.role === 'مدير عام' || (user.permissions && user.permissions.includes('all'));
+        if (!isAdmin) {
+            grid.innerHTML = renderEmployeeProductsGridHtml(user.id);
+        } else if (activeEmployeePosId) {
+            grid.innerHTML = renderEmployeeProductsGridHtml(activeEmployeePosId);
+        } else {
+            grid.innerHTML = renderMainProductsGridHtml();
+        }
+    } else {
+        window.renderCurrentView();
+    }
 };
 
 window.posSearchInput = (query) => {
-    searchQuery = query;
-    window.renderCurrentView();
+    searchQuery = query || '';
+    const grid = document.querySelector('.pos-products-section .products-grid');
+    if (grid) {
+        const user = state.currentUser || { id: 1, role: 'مدير عام', permissions: ['all'] };
+        const isAdmin = user.role === 'مدير عام' || (user.permissions && user.permissions.includes('all'));
+        if (!isAdmin) {
+            grid.innerHTML = renderEmployeeProductsGridHtml(user.id);
+        } else if (activeEmployeePosId) {
+            grid.innerHTML = renderEmployeeProductsGridHtml(activeEmployeePosId);
+        } else {
+            grid.innerHTML = renderMainProductsGridHtml();
+        }
+    } else {
+        window.renderCurrentView();
+    }
+};
+
+window.posSearchKeydown = (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const q = (e.target.value || '').trim().toLowerCase();
+        if (!q) return;
+        const p = state.products.find(prod => String(prod.barcode).toLowerCase() === q || prod.name.toLowerCase() === q);
+        if (p) {
+            window.posAddToCart(p.id);
+        }
+    }
 };
 
 window.posAddToCart = (productId) => {

@@ -361,11 +361,31 @@ document.addEventListener('DOMContentLoaded', () => {
     if (globalSearch) {
         globalSearch.addEventListener('input', (e) => {
             const query = e.target.value.trim().toLowerCase();
-            if (query.length > 0 && currentViewName !== 'pos' && currentViewName !== 'inventory') {
-                window.appRouter('inventory');
-            }
-            if (window.filterInventoryTable) {
-                window.filterInventoryTable(query);
+            if (!query) return;
+
+            // If searching for invoice number or on reports page
+            if (query.startsWith('inv') || currentViewName === 'reports') {
+                if (currentViewName !== 'reports') {
+                    window.appRouter('reports');
+                }
+                if (window.setReportSearchQuery) {
+                    window.setReportSearchQuery(query);
+                }
+            } else if (currentViewName === 'pos') {
+                if (window.posSearchInput) {
+                    window.posSearchInput(query);
+                }
+            } else if (currentViewName === 'customers') {
+                if (window.filterCustomersGrid) {
+                    window.filterCustomersGrid(query);
+                }
+            } else {
+                if (currentViewName !== 'inventory') {
+                    window.appRouter('inventory');
+                }
+                if (window.filterInventoryTable) {
+                    window.filterInventoryTable(query);
+                }
             }
         });
     }

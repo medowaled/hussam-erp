@@ -1035,77 +1035,152 @@ window.openCartItemDiscountPopup = (productId) => {
     if (!item) return;
 
     const productObj = state.products.find(p => p.id === productId);
+    const origUnitPrice = productObj ? (Number(productObj.sellPrice) || 0) : Number(item.unitPrice || 0);
     const buyPrice = productObj ? (Number(productObj.buyPrice) || 0) : (Number(item.buyPrice) || 0);
+    const currentQty = Number(item.qty) || 1;
+    const currentUnitPrice = Number(item.unitPrice) || origUnitPrice;
+    const origTotal = origUnitPrice * currentQty;
+    const currentDiscount = item.itemDiscount !== undefined 
+        ? Number(item.itemDiscount) 
+        : Math.max(0, origTotal - (currentUnitPrice * currentQty));
+    const currentTotal = Math.max(0, currentUnitPrice * currentQty);
 
     const root = document.getElementById('modal-root');
     root.innerHTML = `
         <div class="modal-backdrop active" id="current-modal-backdrop">
-            <div class="modal-dialog" style="max-width: 400px; width: 92%;">
+            <div class="modal-dialog" style="max-width: 440px; width: 92%;">
                 <div class="modal-header">
-                    <div class="modal-title">✏️ خصم على صنف: ${item.name}</div>
+                    <div class="modal-title">✏️ خصم وتعديل سعر: ${item.name}</div>
                     <button class="modal-close" onclick="window.closeCurrentModal()">✕</button>
                 </div>
                 <div class="modal-body">
-                    <div style="background: #0f1524; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <div style="font-weight: 800; color: #fff;">${item.name}</div>
-                            <div style="font-size: 0.8rem; color: var(--text-muted);">${item.qty} قروصة × ${item.unitPrice} ج.م (سعر الشراء: ${buyPrice} ج)</div>
+                    <div style="background: #0f1524; border-radius: 10px; padding: 0.9rem 1rem; margin-bottom: 1rem; border: 1px solid var(--border-color);">
+                        <div class="flex-between" style="margin-bottom: 0.35rem;">
+                            <div style="font-weight: 800; color: #fff; font-size: 0.95rem;">${item.name}</div>
+                            <span class="badge badge-orange">${currentQty} قروصة</span>
                         </div>
-                        <div style="text-align: left;">
-                            <div style="font-size: 1.1rem; font-weight: 900; color: var(--primary-orange);">${item.unitPrice * item.qty} ج.م</div>
+                        <div class="flex-between" style="font-size: 0.8rem; color: var(--text-muted);">
+                            <span>السعر الأصلي: <strong style="color:#fff;">${origUnitPrice} ج.م</strong></span>
+                            <span>سعر الشراء والتكلفة: <strong style="color:var(--accent-teal);">${buyPrice} ج.م</strong></span>
+                        </div>
+                        <div class="flex-between" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">
+                            <span>إجمالي الصنف بالسعر الأصلي:</span>
+                            <strong style="color:var(--primary-orange);">${origTotal} ج.م</strong>
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label class="form-label" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 700;">
-                            خصم خاص بهذا الصنف (ج.م)
-                        </label>
-                        <input type="number" id="item-discount-input" class="form-control"
-                            value="${currentDiscount}" min="0" max="${item.unitPrice * item.qty}"
-                            style="font-size: 1.1rem; font-weight: 800; text-align: center;"
-                            placeholder="0">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+                        <div class="form-group">
+                            <label class="form-label" style="font-size: 0.82rem; color: var(--text-muted); font-weight: 700;">
+                                إجمالي الخصم (ج.م)
+                            </label>
+                            <input type="number" id="item-discount-input" class="form-control"
+                                value="${currentDiscount}" min="0" max="${origTotal}"
+                                style="font-size: 1.05rem; font-weight: 800; text-align: center; color: var(--primary-orange);"
+                                placeholder="0">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" style="font-size: 0.82rem; color: var(--text-muted); font-weight: 700;">
+                                سعر البيع الجديد / قروصة
+                            </label>
+                            <input type="number" id="item-unit-price-input" class="form-control"
+                                value="${currentUnitPrice}" min="0" step="any"
+                                style="font-size: 1.05rem; font-weight: 800; text-align: center; color: #60a5fa;"
+                                placeholder="${origUnitPrice}">
+                        </div>
                     </div>
 
-                    <div id="item-discount-warning" style="display:none; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #ef4444; border-radius: 8px; padding: 0.5rem 0.75rem; margin-top: 0.5rem; font-size: 0.8rem; font-weight: 800;">
+                    <div id="item-discount-warning" style="display:${(buyPrice > 0 && currentUnitPrice < buyPrice) ? 'block' : 'none'}; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #ef4444; border-radius: 8px; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; font-size: 0.8rem; font-weight: 800;">
                         ⚠️ تحذير: سعر البيع بعد الخصم سيكون أقل من سعر الشراء (${buyPrice} ج.م) - سيتم إطلاق تنبيه خسارة!
                     </div>
 
-                    <div id="item-discount-preview" style="background: rgba(15,211,160,0.08); border: 1px solid rgba(15,211,160,0.25); border-radius: 10px; padding: 0.75rem; margin-top: 0.5rem; display: flex; justify-content: space-between; font-size: 0.88rem;">
-                        <span style="color: var(--text-muted);">السعر بعد الخصم:</span>
-                        <span style="font-weight: 900; color: var(--accent-teal);" id="item-discounted-total">${item.unitPrice * item.qty - currentDiscount} ج.م</span>
+                    <div id="item-discount-preview" style="background: rgba(15,211,160,0.08); border: 1px solid rgba(15,211,160,0.25); border-radius: 10px; padding: 0.75rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.88rem;">
+                        <span style="color: var(--text-muted);">الإجمالي المطلوب لهذا الصنف:</span>
+                        <span style="font-weight: 900; color: var(--accent-teal); font-size: 1.1rem;" id="item-discounted-total">${currentTotal} ج.م</span>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button class="btn-secondary" onclick="window.closeCurrentModal()">إلغاء</button>
-                    <button class="btn-primary" onclick="window.applyCartItemDiscount(${productId})">✓ تطبيق الخصم</button>
+                <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 0.5rem;">
+                    <div>
+                        ${(currentDiscount > 0 || currentUnitPrice !== origUnitPrice) ? `
+                            <button type="button" class="btn-secondary" style="color: var(--accent-red); border-color: rgba(239,68,68,0.3); font-size: 0.78rem;" onclick="window.resetCartItemDiscount(${productId})">
+                                إزالة الخصم
+                            </button>
+                        ` : ''}
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button type="button" class="btn-secondary" onclick="window.closeCurrentModal()">إلغاء</button>
+                        <button type="button" class="btn-primary" onclick="window.applyCartItemDiscount(${productId})">✓ تطبيق وتأكيد</button>
+                    </div>
                 </div>
             </div>
         </div>
     `;
 
-    // Live preview
-    document.getElementById('item-discount-input').addEventListener('input', (e) => {
-        const total = item.unitPrice * item.qty;
-        const disc = Math.min(Number(e.target.value) || 0, total);
-        const newTotal = total - disc;
-        const effUnitPrice = item.qty > 0 ? (newTotal / item.qty) : newTotal;
-        document.getElementById('item-discounted-total').textContent = `${newTotal} ج.م`;
-        
-        const warnEl = document.getElementById('item-discount-warning');
+    const discInput = document.getElementById('item-discount-input');
+    const priceInput = document.getElementById('item-unit-price-input');
+    const totalEl = document.getElementById('item-discounted-total');
+    const warnEl = document.getElementById('item-discount-warning');
+
+    const updateFromDiscount = () => {
+        let disc = Math.max(0, Number(discInput.value) || 0);
+        if (disc > origTotal) disc = origTotal;
+        const newTotal = origTotal - disc;
+        const newUnit = currentQty > 0 ? (newTotal / currentQty) : newTotal;
+        priceInput.value = parseFloat(newUnit.toFixed(2));
+        totalEl.textContent = `${newTotal.toFixed(0)} ج.م`;
         if (warnEl) {
-            warnEl.style.display = (buyPrice > 0 && effUnitPrice < buyPrice) ? 'block' : 'none';
+            warnEl.style.display = (buyPrice > 0 && newUnit < buyPrice) ? 'block' : 'none';
         }
-    });
+    };
+
+    const updateFromUnitPrice = () => {
+        let newUnit = Math.max(0, Number(priceInput.value) || 0);
+        const newTotal = newUnit * currentQty;
+        const disc = Math.max(0, origTotal - newTotal);
+        discInput.value = parseFloat(disc.toFixed(2));
+        totalEl.textContent = `${newTotal.toFixed(0)} ج.م`;
+        if (warnEl) {
+            warnEl.style.display = (buyPrice > 0 && newUnit < buyPrice) ? 'block' : 'none';
+        }
+    };
+
+    if (discInput && priceInput) {
+        discInput.addEventListener('input', updateFromDiscount);
+        priceInput.addEventListener('input', updateFromUnitPrice);
+        discInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') window.applyCartItemDiscount(productId); });
+        priceInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') window.applyCartItemDiscount(productId); });
+    }
+};
+
+window.resetCartItemDiscount = (productId) => {
+    const item = state.cart.find(i => i.productId === productId);
+    if (!item) return;
+    const productObj = state.products.find(p => p.id === productId);
+    item.unitPrice = productObj ? productObj.sellPrice : item.unitPrice;
+    delete item.itemDiscount;
+    state.save('hussam_erp_cart_v2.5', state.cart);
+    window.closeCurrentModal();
+    window.renderCurrentView();
 };
 
 window.applyCartItemDiscount = (productId) => {
     const item = state.cart.find(i => i.productId === productId);
     if (!item) return;
+
     const disc = Math.max(0, Number(document.getElementById('item-discount-input')?.value) || 0);
+    const unitPriceVal = Number(document.getElementById('item-unit-price-input')?.value);
+    
+    const productObj = state.products.find(p => p.id === productId);
+    const origUnitPrice = productObj ? productObj.sellPrice : item.unitPrice;
+
+    if (!isNaN(unitPriceVal) && unitPriceVal >= 0) {
+        item.unitPrice = unitPriceVal;
+    } else {
+        item.unitPrice = Math.max(0, origUnitPrice - (item.qty > 0 ? disc / item.qty : 0));
+    }
     item.itemDiscount = disc;
-    // Adjust unitPrice to reflect per-item discount
-    const originalPrice = state.products.find(p => p.id === productId)?.sellPrice || item.unitPrice;
-    item.unitPrice = Math.max(0, originalPrice - (item.qty > 0 ? disc / item.qty : 0));
+
     state.save('hussam_erp_cart_v2.5', state.cart);
     window.closeCurrentModal();
     window.renderCurrentView();
