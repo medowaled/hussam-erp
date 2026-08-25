@@ -1352,13 +1352,18 @@ window.showPaymentReceiptModal = (paymentIdOrObj) => {
                 </div>
 
                 <div class="modal-footer" style="display:flex;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;">
-                    <div style="display:flex;gap:0.4rem;">
+                    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
                         <button class="btn-primary" style="background:#3b82f6;border:none;" onclick="window.printPaymentReceipt()">
                             🖨️ طباعة سند القبض
                         </button>
                         <button class="btn-secondary" style="color:#25d366;border-color:rgba(37,211,102,0.4);" onclick="window.sendPaymentReceiptWhatsapp('${p.voucherNumber}', '${p.customerName}', '${p.amount}', '${p.debtAfter}')">
                             💬 إرسال واتساب
                         </button>
+                        ${p.customerId ? `
+                            <button class="btn-primary" style="background:var(--primary-orange);color:#000;font-weight:800;border:none;" onclick="window.showCustomerStatement(${p.customerId})">
+                                📑 عرض كشف حساب العميل المحدث
+                            </button>
+                        ` : ''}
                     </div>
                     <button class="btn-secondary" onclick="window.closeCurrentModal()">إغلاق</button>
                 </div>
@@ -1777,7 +1782,7 @@ export function showCustomerStatement(customerId, activeFilter = 'all') {
     // 2. Standalone payment receipts (سندات القبض) for this customer
     const customerPayments = (state.customerPayments || []).filter(p => String(p.customerId) === String(customerId) || p.customerName === customer.name);
 
-    // 3. Combine into unified ledger transactions
+    // 3. Map into transactions
     const invoiceTransactions = customerInvoices.map(inv => ({
         type: 'invoice',
         id: inv.id,
@@ -1789,7 +1794,6 @@ export function showCustomerStatement(customerId, activeFilter = 'all') {
         isCash: inv.paymentMethod === 'cash',
         debit: Number(inv.grandTotal || 0),
         credit: Number(inv.paidAmount || 0),
-        due: Number(inv.remainingDebt || 0),
         raw: inv
     }));
 
@@ -1804,11 +1808,29 @@ export function showCustomerStatement(customerId, activeFilter = 'all') {
         isCash: true,
         debit: 0,
         credit: Number(p.amount || 0),
-        due: Number(p.debtAfter || 0),
         raw: p
     }));
 
-    // Merge and sort newest first
+    // 4. Calculate accurate chronological running balance (الرصيد التراكمي بعد كل حركة)
+    const chronoSorted = [...invoiceTransactions, ...paymentTransactions].sort((a, b) => a.timestamp - b.timestamp);
+
+    const sumDebits = invoiceTransactions.reduce((acc, t) => acc + t.debit, 0);
+    const sumCredits = invoiceTransactions.reduce((acc, t) => acc + t.credit, 0) + paymentTransactions.reduce((acc, t) => acc + t.credit, 0);
+    const currentDebt = Number(customer.debt) || 0;
+    const netTransactionsDebt = Math.max(0, sumDebits - sumCredits);
+    const openingBalance = Math.max(0, currentDebt - netTransactionsDebt);
+
+    let runningBalance = openingBalance;
+    chronoSorted.forEach(t => {
+        if (t.type === 'invoice') {
+            runningBalance = Math.max(0, runningBalance + (t.debit - t.credit));
+        } else if (t.type === 'payment') {
+            runningBalance = Math.max(0, runningBalance - t.credit);
+        }
+        t.runningBalance = runningBalance;
+    });
+
+    // 5. Merge and sort newest first for display
     let allTransactions = [...invoiceTransactions, ...paymentTransactions];
     allTransactions.sort((a, b) => b.timestamp - a.timestamp);
 
@@ -1820,9 +1842,12 @@ export function showCustomerStatement(customerId, activeFilter = 'all') {
         displayedTransactions = paymentTransactions.sort((a, b) => b.timestamp - a.timestamp);
     }
 
+    const totalPurchasesDisplay = Math.max(Number(customer.totalPurchases) || 0, sumDebits);
+    const totalPaidDisplay = Math.max(Number(customer.paidAmount) || 0, sumCredits);
+
     root.innerHTML = `
         <div class="modal-backdrop active" id="current-modal-backdrop">
-            <div class="modal-dialog" style="width: 820px; max-width: 96vw;">
+            <div class="modal-dialog" style="width: 860px; max-width: 96vw;">
                 <!-- Header -->
                 <div class="modal-header" style="background: #0f1524; border-bottom: 1px solid var(--border-color);">
                     <div>
@@ -1850,15 +1875,17 @@ export function showCustomerStatement(customerId, activeFilter = 'all') {
                         <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 1.25rem; text-align: center;">
                             <div style="background: #141b2d; padding: 0.65rem 0.5rem; border-radius: 10px; border: 1px solid var(--border-color);">
                                 <div style="font-size: 0.72rem; color: var(--text-muted);">إجمالي المشتريات</div>
-                                <div style="font-size: 1.05rem; font-weight: 900; color: #fff; margin-top: 0.2rem;">${(customer.totalPurchases || 0).toLocaleString('ar-EG')} ج.م</div>
+                                <div style="font-size: 1.05rem; font-weight: 900; color: #fff; margin-top: 0.2rem;">${totalPurchasesDisplay.toLocaleString('ar-EG')} ج.م</div>
                             </div>
                             <div style="background: #141b2d; padding: 0.65rem 0.5rem; border-radius: 10px; border: 1px solid var(--border-color);">
                                 <div style="font-size: 0.72rem; color: var(--text-muted);">إجمالي المدفوع (شامل السندات)</div>
-                                <div style="font-size: 1.05rem; font-weight: 900; color: var(--accent-teal); margin-top: 0.2rem;">${(customer.paidAmount || 0).toLocaleString('ar-EG')} ج.م</div>
+                                <div style="font-size: 1.05rem; font-weight: 900; color: var(--accent-teal); margin-top: 0.2rem;">${totalPaidDisplay.toLocaleString('ar-EG')} ج.م</div>
                             </div>
                             <div style="background: #141b2d; padding: 0.65rem 0.5rem; border-radius: 10px; border: 1px solid var(--border-color);">
-                                <div style="font-size: 0.72rem; color: var(--text-muted);">الرصيد المتبقي (الدين)</div>
-                                <div style="font-size: 1.05rem; font-weight: 900; color: var(--accent-red); margin-top: 0.2rem;">${(customer.debt || 0).toLocaleString('ar-EG')} ج.م</div>
+                                <div style="font-size: 0.72rem; color: var(--text-muted);">الرصيد المتبقي (الدين الحالي)</div>
+                                <div style="font-size: 1.05rem; font-weight: 900; color: ${currentDebt > 0 ? 'var(--accent-red)' : 'var(--accent-teal)'}; margin-top: 0.2rem;">
+                                    ${currentDebt > 0 ? `${currentDebt.toLocaleString('ar-EG')} ج.م` : '✅ خالي الديون'}
+                                </div>
                             </div>
                             <div style="background: #141b2d; padding: 0.65rem 0.5rem; border-radius: 10px; border: 1px solid var(--border-color);">
                                 <div style="font-size: 0.72rem; color: var(--text-muted);">عدد الحركات</div>
@@ -1895,7 +1922,7 @@ export function showCustomerStatement(customerId, activeFilter = 'all') {
                                             <th style="padding: 0.6rem 0.6rem;">البيان والتفاصيل</th>
                                             <th style="padding: 0.6rem 0.6rem; text-align: center;">المشتريات (+)</th>
                                             <th style="padding: 0.6rem 0.6rem; text-align: center;">المسدد (-)</th>
-                                            <th style="padding: 0.6rem 0.6rem; text-align: center;">الرصيد/المتبقي</th>
+                                            <th style="padding: 0.6rem 0.6rem; text-align: center;">الرصيد المتبقي بعد الحركة</th>
                                             <th style="padding: 0.6rem 0.6rem; text-align: center;">معاينة</th>
                                         </tr>
                                     </thead>
@@ -1915,7 +1942,7 @@ export function showCustomerStatement(customerId, activeFilter = 'all') {
                                                         : `<span style="color: var(--accent-teal); cursor: pointer; text-decoration: underline;" onclick="window.showPaymentReceiptModal(${t.id})">${t.refNumber}</span>`
                                                     }
                                                 </td>
-                                                <td style="padding: 0.6rem 0.6rem; font-size: 0.78rem; color: #cbd5e1; max-width: 200px;">
+                                                <td style="padding: 0.6rem 0.6rem; font-size: 0.78rem; color: #cbd5e1; max-width: 220px;">
                                                     ${t.description}
                                                 </td>
                                                 <td style="padding: 0.6rem 0.6rem; text-align: center; font-weight: 800; color: #fff; white-space: nowrap;">
@@ -1925,10 +1952,12 @@ export function showCustomerStatement(customerId, activeFilter = 'all') {
                                                     ${t.credit > 0 ? `${t.credit.toLocaleString('ar-EG')} ج` : '-'}
                                                 </td>
                                                 <td style="padding: 0.6rem 0.6rem; text-align: center; white-space: nowrap;">
-                                                    ${t.type === 'invoice' 
-                                                        ? (t.due > 0 ? `<span style="color: var(--accent-red); font-weight: 700;">آجل: ${t.due.toLocaleString('ar-EG')} ج</span>` : '<span style="color: var(--accent-teal); font-size:0.75rem;">مسددة بالكامل</span>')
-                                                        : `<span style="color: ${t.due > 0 ? 'var(--accent-red)' : 'var(--accent-teal)'}; font-weight: 700;">الباقي: ${t.due.toLocaleString('ar-EG')} ج</span>`
-                                                    }
+                                                    <span style="color: ${t.runningBalance > 0 ? 'var(--accent-red)' : 'var(--accent-teal)'}; font-weight: 800;">
+                                                        ${t.runningBalance > 0 ? `${t.runningBalance.toLocaleString('ar-EG')} ج` : '0 ج (خالص)'}
+                                                    </span>
+                                                    ${t.type === 'invoice' && t.credit > 0 ? `
+                                                        <div style="font-size: 0.68rem; color: var(--accent-teal); margin-top: 2px;">(سدد كاش ${t.credit} ج)</div>
+                                                    ` : ''}
                                                 </td>
                                                 <td style="padding: 0.6rem 0.6rem; text-align: center; font-size: 1rem;">
                                                     ${t.type === 'invoice'
