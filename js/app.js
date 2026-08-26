@@ -153,12 +153,18 @@ window.renderCurrentView = () => {
 
     if (!requireAuth()) return;
 
+    const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+
     if (viewsMap[currentViewName]) {
         try {
             container.innerHTML = viewsMap[currentViewName]();
             // Initialize charts after DOM is injected
             if (currentViewName === 'dashboard') {
                 requestAnimationFrame(() => initDashboardCharts());
+            }
+            if (scrollY > 0 || scrollX > 0) {
+                window.scrollTo(scrollX, scrollY);
             }
         } catch (err) {
             console.error(`❌ Error rendering view "${currentViewName}":`, err);

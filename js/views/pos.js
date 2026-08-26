@@ -65,7 +65,7 @@ function renderCartItemHtml(item) {
     const isBelowBuy = buyPrice > 0 && item.unitPrice < buyPrice;
 
     return `
-        <div class="cart-item-card" style="${isBelowBuy ? 'border: 1px solid rgba(239,68,68,0.5); background: rgba(239,68,68,0.06);' : ''}">
+        <div class="cart-item-card" id="cart-item-card-${item.productId}" style="${isBelowBuy ? 'border: 1px solid rgba(239,68,68,0.5); background: rgba(239,68,68,0.06);' : ''}">
             <div class="cart-item-info">
                 <div class="cart-item-title">
                     ${item.name}
@@ -75,11 +75,12 @@ function renderCartItemHtml(item) {
             </div>
             <div class="cart-item-controls">
                 <div class="qty-stepper">
-                    <button type="button" class="qty-step-btn" onclick="window.posUpdateQty(${item.productId}, ${item.qty - 1})" aria-label="تقليل الكمية">−</button>
+                    <button type="button" class="qty-step-btn" onclick="window.posUpdateQty(${item.productId}, -1, true)" aria-label="تقليل الكمية">−</button>
                     <input
                         type="number"
                         inputmode="numeric"
                         pattern="[0-9]*"
+                        id="qty-input-${item.productId}"
                         class="qty-value-input"
                         value="${item.qty}"
                         min="1"
@@ -88,7 +89,7 @@ function renderCartItemHtml(item) {
                         onblur="window.posCommitQtyInput(${item.productId}, this)"
                         onkeydown="if(event.key==='Enter'){this.blur();}"
                     >
-                    <button type="button" class="qty-step-btn" onclick="window.posUpdateQty(${item.productId}, ${item.qty + 1})" aria-label="زيادة الكمية">+</button>
+                    <button type="button" class="qty-step-btn" onclick="window.posUpdateQty(${item.productId}, 1, true)" aria-label="زيادة الكمية">+</button>
                 </div>
                 <div class="cart-item-total" id="cart-item-total-${item.productId}">${(item.unitPrice * item.qty).toFixed(0)} ج</div>
                 <div class="cart-item-actions">
@@ -896,7 +897,7 @@ window.posUpdateQtyInline = (productId, inputEl) => {
 window.posCommitQtyInput = (productId, inputEl) => {
     const raw = String(inputEl.value).trim();
     const val = Number(raw);
-    const cartItem = state.cart.find(i => i.productId === productId);
+    const cartItem = state.cart.find(i => Number(i.productId) === Number(productId));
 
     if (!cartItem) return;
 
@@ -905,28 +906,98 @@ window.posCommitQtyInput = (productId, inputEl) => {
         return;
     }
 
-    window.posUpdateQty(productId, val);
+    window.posUpdateQty(productId, val, false);
 };
 
-window.posUpdateQty = (productId, qty) => {
-    const targetQty = Math.max(0, Number(qty) || 0);
+window.posUpdateQty = (productId, qtyOrDelta, isDelta = false) => {
+    const cartItem = state.cart.find(i => Number(i.productId) === Number(productId));
+    const targetQty = isDelta
+        ? Math.max(0, (cartItem ? cartItem.qty : 0) + qtyOrDelta)
+        : Math.max(0, Number(qtyOrDelta) || 0);
+
     if (targetQty <= 0) {
-        state.removeFromCart(productId);
-        window.renderCurrentView();
+        window.posRemoveItem(productId);
         return;
     }
 
-    const product = state.products.find(p => p.id === productId);
+    const product = state.products.find(p => Number(p.id) === Number(productId));
     if (!product) return;
 
     const finalQty = Math.min(targetQty, product.stockPacks);
     state.updateCartQty(productId, finalQty);
-    window.renderCurrentView();
+
+    // Update Input value smoothly in DOM
+    const inputEl = document.getElementById(`qty-input-${productId}`);
+    if (inputEl) {
+        inputEl.value = finalQty;
+    }
+
+    // Update item total price text smoothly
+    const itemTotalEl = document.getElementById(`cart-item-total-${productId}`);
+    if (itemTotalEl && cartItem) {
+        itemTotalEl.innerText = `${(cartItem.unitPrice * finalQty).toFixed(0)} ج`;
+    }
+
+    // Update cart item count badge
+    const badgeEl = document.getElementById('cart-item-count-badge');
+    if (badgeEl) {
+        const totalQty = state.cart.reduce((sum, i) => sum + i.qty, 0);
+        badgeEl.innerText = `${totalQty} أصناف في السلة`;
+    }
+
+    // Update mobile cart bar if present
+    const mobileBar = document.querySelector('.mobile-floating-cart-bar');
+    if (mobileBar) {
+        const totalQty = state.cart.reduce((sum, i) => sum + i.qty, 0);
+        const subtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.qty), 0);
+        const labelEl = mobileBar.querySelector('.mobile-cart-bar-label');
+        if (labelEl) labelEl.innerText = `الفاتورة والسلة (${totalQty} أصناف)`;
+        const totalEl = mobileBar.querySelector('.mobile-cart-bar-total');
+        if (totalEl) totalEl.innerText = `${subtotal} ج.م`;
+    }
+
+    window.posRecalculateTotals();
 };
 
 window.posRemoveItem = (productId) => {
     state.removeFromCart(productId);
-    window.renderCurrentView();
+
+    // Remove element smoothly from DOM
+    const cardEl = document.getElementById(`cart-item-card-${productId}`);
+    if (cardEl) {
+        cardEl.remove();
+    }
+
+    // If cart is now empty, render empty state in list
+    const cartList = document.querySelector('.cart-items-list');
+    if (cartList && state.cart.length === 0) {
+        cartList.innerHTML = `
+            <div class="empty-table-state" style="padding:1.5rem 0.5rem;">
+                <i style="font-size:1.5rem;color:#232d48;">🛒</i>
+                <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.5rem;text-align:center;">
+                    الفاتورة فارغة. اضغط على خيارات الأصناف لإضافتها إلى السلة.
+                </p>
+            </div>
+        `;
+    }
+
+    const badgeEl = document.getElementById('cart-item-count-badge');
+    if (badgeEl) {
+        const totalQty = state.cart.reduce((sum, i) => sum + i.qty, 0);
+        badgeEl.innerText = `${totalQty} أصناف في السلة`;
+    }
+
+    const mobileBar = document.querySelector('.mobile-floating-cart-bar');
+    if (mobileBar) {
+        const totalQty = state.cart.reduce((sum, i) => sum + i.qty, 0);
+        const subtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.qty), 0);
+        const labelEl = mobileBar.querySelector('.mobile-cart-bar-label');
+        if (labelEl) labelEl.innerText = `الفاتورة والسلة (${totalQty} أصناف)`;
+        const totalEl = mobileBar.querySelector('.mobile-cart-bar-total');
+        if (totalEl) totalEl.innerText = `${subtotal} ج.م`;
+    }
+
+    window.posRecalculateTotals();
 };
 
 window.posClearCart = () => {
