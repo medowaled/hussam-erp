@@ -267,18 +267,19 @@ export function openAssignQuotaModal(userId) {
                                 <div style="font-weight: 800; color: #fff; font-size: 0.9rem;">${p.name}</div>
                                 <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem;">
                                     المخزن الكلي: <strong style="color: #fff;">${p.stockPacks}</strong> قروصة |
-                                    المتاح للتوزيع الآن: <strong style="color: var(--accent-teal);">${freeStock}</strong> قروصة
+                                    المتاح بالمخزن: <strong style="color: var(--accent-teal);">${freeStock}</strong> |
+                                    المتبقي معه حالياً: <strong style="color: var(--primary-orange);">${q.remainingQty}</strong> قروصة
                                 </div>
                             </div>
 
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <label style="font-size: 0.78rem; color: var(--text-muted); white-space: nowrap;">الكمية المخصصة (العهدة):</label>
+                                <label style="font-size: 0.78rem; color: var(--text-muted); white-space: nowrap;">العهدة المتاحة للبيع الآن:</label>
                                 <input type="number"
                                     class="form-control q-prod-input"
                                     data-product-id="${p.id}"
-                                    value="${q.allocatedQty || 0}"
+                                    value="${q.remainingQty || 0}"
                                     min="0"
-                                    max="${freeStock + (q.allocatedQty - q.soldQty)}"
+                                    max="${freeStock + q.remainingQty}"
                                     style="width: 85px; text-align: center; font-weight: 800; font-size: 0.9rem; padding: 0.3rem;"
                                     placeholder="0">
                             </div>

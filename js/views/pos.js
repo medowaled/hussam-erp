@@ -513,8 +513,8 @@ function renderAdminEmployeePosHubView() {
 
                 if (emp.productQuotas && emp.productQuotas !== 'all') {
                     Object.values(emp.productQuotas).forEach(q => {
-                        const rem = Math.max(0, (q.allocatedQty || 0) - (q.soldQty || 0));
-                        if (rem > 0 || q.allocatedQty > 0) {
+                        const rem = Math.max(0, (Number(q.allocatedQty) || 0) - (Number(q.soldQty) || 0));
+                        if (rem > 0) {
                             allocatedItemCount++;
                             totalAllocPacks += rem;
                         }
@@ -1016,12 +1016,17 @@ window.posProcessCheckout = () => {
     const discount     = Number(document.getElementById('pos-discount-input')?.value || 0);
     const paidAmount   = Number(document.getElementById('pos-paid-input')?.value || 0);
 
+    const activeSellerId = activeEmployeePosId || (state.currentUser ? state.currentUser.id : 1);
+    const activeSeller = state.users.find(u => u.id === activeSellerId) || state.currentUser || { id: 1, name: 'حسام حسني' };
+
     const draftInvoice = state.prepareInvoiceDraft({
         customerId,
         customerName: customerId ? customerText.split('(')[0].trim() : 'عميل نقدي (كاش)',
         discount,
         paymentMethod: 'partial',
-        paidAmount
+        paidAmount,
+        sellerId: activeSeller.id,
+        sellerName: activeSeller.name
     });
 
     if (draftInvoice) {

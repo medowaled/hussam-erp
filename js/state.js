@@ -520,7 +520,8 @@ class ERPState {
         const totalDebtAfterInvoice = Math.max(0, totalDebtBeforePayment - paidAmount);
 
         const invoiceNumber = 'INV-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
-        const seller = this.currentUser || { id: 1, name: 'حسام حسني' };
+        const sellerId = checkoutData.sellerId || (this.currentUser ? this.currentUser.id : 1);
+        const seller = this.users.find(u => u.id === sellerId) || this.currentUser || { id: 1, name: 'حسام حسني' };
 
         return {
             id: Date.now(),
@@ -567,8 +568,8 @@ class ERPState {
         const totalDebtAfterInvoice = checkoutData.totalDebtAfterInvoice !== undefined ? Number(checkoutData.totalDebtAfterInvoice) : Math.max(0, totalDebtBeforePayment - paidAmount);
 
         const invoiceNumber = checkoutData.invoiceNumber || ('INV-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000));
-
-        const seller = this.currentUser || { id: 1, name: 'حسام حسني' };
+        const sellerId = (checkoutData && checkoutData.sellerId) || (this.currentUser ? this.currentUser.id : 1);
+        const seller = this.users.find(u => u.id === sellerId) || this.currentUser || { id: 1, name: 'حسام حسني' };
 
         const newInvoice = {
             id: checkoutData.id || Date.now(),
@@ -1084,16 +1085,18 @@ class ERPState {
             const product = this.products.find(p => p.id === productId);
             if (!product) continue;
 
-            const requestedAlloc = Number(newAllocQty) || 0;
-            const existingSold = (resetSoldQty ? 0 : (user.productQuotas && user.productQuotas[productId] ? Number(user.productQuotas[productId].soldQty) || 0 : 0));
+            const requestedAlloc = Math.max(0, Number(newAllocQty) || 0);
+            const currentRem = user.productQuotas && user.productQuotas[productId]
+                ? Math.max(0, (Number(user.productQuotas[productId].allocatedQty) || 0) - (Number(user.productQuotas[productId].soldQty) || 0))
+                : 0;
 
-            const netRequestedQuota = Math.max(0, requestedAlloc - existingSold);
             const freeStock = this.getUnallocatedStock(productId, userId);
+            const deltaNeeded = Math.max(0, requestedAlloc - currentRem);
 
-            if (netRequestedQuota > freeStock) {
+            if (deltaNeeded > freeStock) {
                 return {
                     success: false,
-                    message: `عفواً! الكمية المتاحة للتخصيص بالمخزن الرئيسي لصنف (${product.name}) هي ${freeStock} قروصة فقط! لا يمكنك تخصيص ${requestedAlloc} لهذا الموظف لأن الكمية مخصصة بعُهد لموظفين آخرين أو غير متوفرة.`
+                    message: `عفواً! الكمية المتاحة للتخصيص بالمخزن الرئيسي لصنف (${product.name}) هي ${freeStock} قروصة فقط! لا يمكنك تخصيص ${requestedAlloc} لهذا الموظف لأن المخزن لا يتوفر به هذا الرصيد الحر.`
                 };
             }
         }
@@ -1106,11 +1109,17 @@ class ERPState {
 
         for (const [prodIdStr, newAllocQty] of Object.entries(productQuotas)) {
             const productId = Number(prodIdStr);
-            const existingSold = resetSoldQty ? 0 : (user.productQuotas[productId] ? (user.productQuotas[productId].soldQty || 0) : 0);
+            const requestedAlloc = Math.max(0, Number(newAllocQty) || 0);
             user.productQuotas[productId] = {
-                allocatedQty: Number(newAllocQty) || 0,
-                soldQty: existingSold
+                allocatedQty: requestedAlloc,
+                soldQty: 0
             };
+        }
+
+        // If admin requested clearing previous sold records / history for this delegate
+        if (resetSoldQty) {
+            this.invoices = this.invoices.filter(inv => String(inv.sellerId) !== String(userId) && inv.sellerName !== user.name);
+            this.save(STORAGE_KEYS.INVOICES, this.invoices);
         }
 
         this.save(STORAGE_KEYS.USERS, this.users);
