@@ -512,15 +512,15 @@ function renderAdminEmployeePosHubView() {
                 let allocatedItemCount = 0;
 
                 if (emp.productQuotas && emp.productQuotas !== 'all') {
-                    Object.values(emp.productQuotas).forEach(q => {
-                        const rem = Math.max(0, (Number(q.allocatedQty) || 0) - (Number(q.soldQty) || 0));
-                        if (rem > 0) {
+                    Object.keys(emp.productQuotas).forEach(pId => {
+                        const q = state.getEmployeeQuota(emp.id, pId);
+                        if (q.remainingQty > 0) {
                             allocatedItemCount++;
-                            totalAllocPacks += rem;
+                            totalAllocPacks += q.remainingQty;
                         }
                     });
                 } else if (emp.productQuotas === 'all') {
-                    allocatedItemCount = state.products.length;
+                    allocatedItemCount = state.products.filter(p => p.stockPacks > 0).length;
                     totalAllocPacks = state.products.reduce((s, p) => s + p.stockPacks, 0);
                 }
 

@@ -569,7 +569,7 @@ class ERPState {
 
         const invoiceNumber = checkoutData.invoiceNumber || ('INV-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000));
         const sellerId = (checkoutData && checkoutData.sellerId) || (this.currentUser ? this.currentUser.id : 1);
-        const seller = this.users.find(u => u.id === sellerId) || this.currentUser || { id: 1, name: 'حسام حسني' };
+        const seller = this.users.find(u => String(u.id) === String(sellerId)) || this.currentUser || { id: 1, name: 'حسام حسني' };
 
         const newInvoice = {
             id: checkoutData.id || Date.now(),
@@ -594,18 +594,21 @@ class ERPState {
         };
 
         // Deduct inventory stock & update employee quota soldQty
-        const sellerUserObj = this.users.find(u => u.id === seller.id);
+        const sellerUserObj = this.users.find(u => String(u.id) === String(seller.id));
 
         itemsToCheckout.forEach(cartItem => {
-            const product = this.products.find(p => p.id === cartItem.productId);
+            const prodId = Number(cartItem.productId);
+            const product = this.products.find(p => Number(p.id) === prodId);
             if (product) {
                 product.stockPacks = Math.max(0, product.stockPacks - cartItem.qty);
             }
             if (sellerUserObj && sellerUserObj.productQuotas && sellerUserObj.productQuotas !== 'all') {
-                if (!sellerUserObj.productQuotas[cartItem.productId]) {
-                    sellerUserObj.productQuotas[cartItem.productId] = { allocatedQty: 0, soldQty: 0 };
+                const existingQ = sellerUserObj.productQuotas[prodId] || sellerUserObj.productQuotas[String(prodId)];
+                if (!existingQ) {
+                    sellerUserObj.productQuotas[prodId] = { allocatedQty: 0, soldQty: cartItem.qty };
+                } else {
+                    existingQ.soldQty = (Number(existingQ.soldQty) || 0) + cartItem.qty;
                 }
-                sellerUserObj.productQuotas[cartItem.productId].soldQty = (sellerUserObj.productQuotas[cartItem.productId].soldQty || 0) + cartItem.qty;
             }
         });
         this.save(STORAGE_KEYS.PRODUCTS, this.products);
@@ -1016,24 +1019,26 @@ class ERPState {
 
     /* Employee Quotas & Customer Assignment */
     getEmployeeQuota(userId, productId) {
-        const user = this.users.find(u => u.id === userId);
+        const user = this.users.find(u => String(u.id) === String(userId));
+        const product = this.products.find(p => String(p.id) === String(productId));
+        const currentStock = product ? Number(product.stockPacks) || 0 : 0;
+
         if (!user || user.productQuotas === 'all') {
-            const product = this.products.find(p => p.id === productId);
             return {
                 isUnlimited: true,
-                remainingQty: product ? product.stockPacks : 0,
-                allocatedQty: product ? product.stockPacks : 0,
+                remainingQty: currentStock,
+                allocatedQty: currentStock,
                 soldQty: 0
             };
         }
 
-        const q = user.productQuotas && user.productQuotas[productId]
-            ? user.productQuotas[productId]
+        const q = user.productQuotas && (user.productQuotas[productId] || user.productQuotas[String(productId)])
+            ? (user.productQuotas[productId] || user.productQuotas[String(productId)])
             : { allocatedQty: 0, soldQty: 0 };
 
         const allocated = Number(q.allocatedQty) || 0;
         const sold = Number(q.soldQty) || 0;
-        const remaining = Math.max(0, allocated - sold);
+        const remaining = Math.min(currentStock, Math.max(0, allocated - sold));
 
         return {
             isUnlimited: false,
@@ -1044,14 +1049,14 @@ class ERPState {
     }
 
     getUnallocatedStock(productId, excludeUserId = null) {
-        const product = this.products.find(p => p.id === productId);
+        const product = this.products.find(p => String(p.id) === String(productId));
         if (!product) return 0;
 
         let totalAllocatedOtherEmployees = 0;
 
         this.users.forEach(u => {
-            if (u.id !== excludeUserId && u.productQuotas && u.productQuotas !== 'all') {
-                const q = u.productQuotas[productId];
+            if (String(u.id) !== String(excludeUserId) && u.productQuotas && u.productQuotas !== 'all') {
+                const q = u.productQuotas[productId] || u.productQuotas[String(productId)];
                 if (q) {
                     const rem = Math.max(0, (Number(q.allocatedQty) || 0) - (Number(q.soldQty) || 0));
                     totalAllocatedOtherEmployees += rem;

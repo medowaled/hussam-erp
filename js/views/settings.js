@@ -52,8 +52,10 @@ export function renderSettingsView() {
                             const isSuper = u.role === 'مدير عام' || (u.permissions && u.permissions.includes('all'));
                             const isBlocked = u.status === 'disabled';
 
-                            const assignedCustCount = Array.isArray(u.assignedCustomers) ? u.assignedCustomers.length : 'كافة العملاء';
-                            const quotasCount = u.productQuotas && u.productQuotas !== 'all' ? Object.keys(u.productQuotas).length : 'مفتوحة (مخزن كلي)';
+                            const activeQuotasCount = u.productQuotas && u.productQuotas !== 'all' 
+                                ? Object.keys(u.productQuotas).filter(pId => state.getEmployeeQuota(u.id, pId).remainingQty > 0).length 
+                                : 'مفتوحة (مخزن كلي)';
+                            const quotasCount = u.productQuotas && u.productQuotas !== 'all' ? `${activeQuotasCount} أصناف` : 'مفتوحة (مخزن كلي)';
 
                             return `
                                 <tr style="${isBlocked ? 'opacity: 0.6; background: rgba(239, 68, 68, 0.05);' : ''}">
