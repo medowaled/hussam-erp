@@ -378,64 +378,6 @@ class ERPState {
                 if (window.updateHeaderAndSidebarStats) window.updateHeaderAndSidebarStats();
             }
         });
-
-        // 3. Fast Real-Time Polling Heartbeat (every 3 seconds)
-        // Ensures 100% sync reliability even if mobile OS throttles WebSockets when screen was locked
-        setInterval(async () => {
-            if (!this.isAuthenticated()) return;
-            try {
-                const priorityKeys = [STORAGE_KEYS.CUSTOMERS, STORAGE_KEYS.CUSTOMER_PAYMENTS, STORAGE_KEYS.INVOICES, STORAGE_KEYS.USERS];
-                let hasFreshData = false;
-                await Promise.all(priorityKeys.map(async (key) => {
-                    const remoteDoc = await pullFromFirestore(key);
-                    if (remoteDoc && remoteDoc.data !== undefined) {
-                        const localRaw = localStorage.getItem(key);
-                        if (JSON.stringify(remoteDoc.data) !== localRaw) {
-                            const merged = this._mergeLoadedCollection(key, remoteDoc.data);
-                            try {
-                                localStorage.setItem(key, JSON.stringify(merged));
-                                localStorage.setItem(key + '_updatedAt', String(Date.now()));
-                            } catch (e) {}
-                            hasFreshData = true;
-                        }
-                    }
-                }));
-                if (hasFreshData) {
-                    this.notify();
-                    if (typeof window !== 'undefined' && this.isAuthenticated()) {
-                        if (window.renderCurrentView) window.renderCurrentView();
-                        if (window.updateHeaderAndSidebarStats) window.updateHeaderAndSidebarStats();
-                    }
-                }
-            } catch (e) {}
-        }, 3000);
-
-        // 4. Instant Sync on Window Focus / Visibility Change (immediate sync when user switches apps)
-        if (typeof window !== 'undefined') {
-            const syncOnActivate = async () => {
-                if (!this.isAuthenticated()) return;
-                try {
-                    const priorityKeys = [STORAGE_KEYS.CUSTOMERS, STORAGE_KEYS.CUSTOMER_PAYMENTS, STORAGE_KEYS.INVOICES];
-                    await Promise.all(priorityKeys.map(async (key) => {
-                        const remoteDoc = await pullFromFirestore(key);
-                        if (remoteDoc && remoteDoc.data !== undefined) {
-                            const merged = this._mergeLoadedCollection(key, remoteDoc.data);
-                            try {
-                                localStorage.setItem(key, JSON.stringify(merged));
-                                localStorage.setItem(key + '_updatedAt', String(Date.now()));
-                            } catch (e) {}
-                        }
-                    }));
-                    this.notify();
-                    if (window.renderCurrentView) window.renderCurrentView();
-                    if (window.updateHeaderAndSidebarStats) window.updateHeaderAndSidebarStats();
-                } catch (e) {}
-            };
-            window.addEventListener('focus', syncOnActivate);
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') syncOnActivate();
-            });
-        }
     }
 
     subscribe(listener) {
