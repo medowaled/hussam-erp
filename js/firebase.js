@@ -54,7 +54,10 @@ export function getFirestoreDB() {
 /** Write one storage key into Firestore (document = key name). */
 export async function pushToFirestore(key, value, updatedAt = Date.now()) {
     const database = getFirestoreDB();
-    if (!database) return false;
+    if (!database) {
+        console.warn('[Cloud Sync] Firestore DB not available for push');
+        return false;
+    }
     try {
         // Clean JSON data to eliminate undefined values which Firestore rejects
         const cleanData = JSON.parse(JSON.stringify(value));
@@ -62,9 +65,16 @@ export async function pushToFirestore(key, value, updatedAt = Date.now()) {
             data: cleanData,
             updatedAt: updatedAt || Date.now()
         });
+        console.log(`[Cloud Sync ✅] Successfully synced ${key} to cloud`);
+        if (typeof window !== 'undefined' && window.updateCloudSyncBadge) {
+            window.updateCloudSyncBadge(true);
+        }
         return true;
     } catch (e) {
-        console.error('Firestore write error:', e);
+        console.error(`[Cloud Sync ❌ Error] Failed to write ${key} to Firestore:`, e);
+        if (typeof window !== 'undefined' && window.updateCloudSyncBadge) {
+            window.updateCloudSyncBadge(false, e.message || e.code);
+        }
         return false;
     }
 }
@@ -82,7 +92,10 @@ export async function pullFromFirestore(key) {
             updatedAt: Number(d.updatedAt || 0)
         };
     } catch (e) {
-        console.error('Firestore read error:', e);
+        console.error(`[Cloud Sync ❌ Error] Read failed for ${key}:`, e);
+        if (typeof window !== 'undefined' && window.updateCloudSyncBadge) {
+            window.updateCloudSyncBadge(false, e.message || e.code);
+        }
         return null;
     }
 }
@@ -91,22 +104,33 @@ export function subscribeToFirestore(onDocumentChange) {
     const database = getFirestoreDB();
     if (!database) return null;
     try {
+        console.log('[Cloud Sync] Initializing live listener on collection:', FIRESTORE_COLLECTION);
         return database.collection(FIRESTORE_COLLECTION).onSnapshot(
             snapshot => {
+                if (typeof window !== 'undefined' && window.updateCloudSyncBadge) {
+                    window.updateCloudSyncBadge(true);
+                }
                 snapshot.docChanges().forEach(change => {
                     const key = change.doc.id;
                     const docData = change.doc.data();
                     if (docData && docData.data !== undefined) {
+                        console.log(`[Cloud Sync 🔄 Event] Remote update received for ${key}`);
                         onDocumentChange(key, docData.data, Number(docData.updatedAt || 0));
                     }
                 });
             },
             err => {
-                console.warn('Firestore real-time sync subscription error:', err);
+                console.error('[Cloud Sync ❌ Listener Error]:', err);
+                if (typeof window !== 'undefined' && window.updateCloudSyncBadge) {
+                    window.updateCloudSyncBadge(false, err.message || err.code);
+                }
             }
         );
     } catch (e) {
         console.warn('Failed to initialize Firestore real-time subscription:', e);
+        if (typeof window !== 'undefined' && window.updateCloudSyncBadge) {
+            window.updateCloudSyncBadge(false, e.message);
+        }
         return null;
     }
 }

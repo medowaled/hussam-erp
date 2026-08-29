@@ -311,6 +311,29 @@ function updateHeaderAndSidebarStats() {
     avatarEls.forEach(el => el.textContent = user.name ? user.name.charAt(0) : 'م');
 }
 
+window.updateCloudSyncBadge = (isConnected, errorMsg = '') => {
+    const badge = document.getElementById('cloud-sync-badge');
+    const dot = document.getElementById('cloud-sync-dot');
+    const text = document.getElementById('cloud-sync-text');
+    if (!badge || !dot || !text) return;
+
+    if (isConnected) {
+        badge.style.background = 'rgba(16, 185, 129, 0.15)';
+        badge.style.color = '#10b981';
+        badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+        dot.style.background = '#10b981';
+        text.textContent = 'سحابي متصل ⚡';
+        badge.title = 'السحابة متصلة وتعمل بالمزامنة اللحظية';
+    } else {
+        badge.style.background = 'rgba(239, 68, 68, 0.2)';
+        badge.style.color = '#ef4444';
+        badge.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+        dot.style.background = '#ef4444';
+        text.textContent = 'السحابة محظورة ⚠️';
+        badge.title = 'تحقق من قواعد فايربيس (Rules): ' + errorMsg;
+    }
+};
+
 // Global Application Initialization
 document.addEventListener('DOMContentLoaded', () => {
     Modals.setupModals();
