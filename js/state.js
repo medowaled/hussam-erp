@@ -219,7 +219,6 @@ class ERPState {
             if (key === STORAGE_KEYS.CURRENT_USER || remoteValue === null || remoteValue === undefined) return;
             try { localStorage.setItem(key, JSON.stringify(remoteValue)); } catch (e) {}
             this._assignLoadedValue(key, remoteValue);
-            this.checkStockThresholds();
 
             if (_syncDebounceTimer) clearTimeout(_syncDebounceTimer);
             _syncDebounceTimer = setTimeout(() => {
@@ -935,7 +934,8 @@ class ERPState {
     }
 
     /* Notifications Engine */
-    checkStockThresholds() {
+    checkStockThresholds(saveToStorage = true) {
+        let added = false;
         this.products.forEach(p => {
             if (p.stockPacks <= p.minStockPacks) {
                 const exists = this.notifications.some(n => n.productId === p.id);
@@ -948,10 +948,13 @@ class ERPState {
                         type: 'warning',
                         createdAt: new Date().toLocaleString('ar-EG')
                     });
+                    added = true;
                 }
             }
         });
-        this.save(STORAGE_KEYS.NOTIFICATIONS, this.notifications);
+        if (added && saveToStorage) {
+            this.save(STORAGE_KEYS.NOTIFICATIONS, this.notifications);
+        }
     }
 
     clearAllNotifications() {

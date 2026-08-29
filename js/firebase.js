@@ -84,8 +84,13 @@ export function subscribeToFirestore(onDocumentChange) {
     if (!database) return null;
     try {
         return database.collection(FIRESTORE_COLLECTION).onSnapshot(
+            { includeMetadataChanges: true },
             snapshot => {
                 snapshot.docChanges().forEach(change => {
+                    // Ignore our own local writes while pending to prevent feedback loops and memory leaks
+                    if (change.doc.metadata && change.doc.metadata.hasPendingWrites) {
+                        return;
+                    }
                     const key = change.doc.id;
                     const docData = change.doc.data();
                     if (docData && docData.data !== undefined) {
