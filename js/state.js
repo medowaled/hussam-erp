@@ -322,8 +322,8 @@ class ERPState {
     }
 
     /**
-     * Pull all data from Firestore with high-speed parallel loading.
-     * Guarantees instantaneous startup and zero-delay cross-device synchronization.
+     * Pull all data from Firestore with timestamp reconciliation.
+     * Guarantees that local edits are never overwritten by older cloud data on refresh.
      */
     async initFirebaseSync() {
         if (!getFirestoreDB()) {
@@ -331,26 +331,40 @@ class ERPState {
             return;
         }
 
-        // 1. Parallel High-Speed Initial Load from Firestore
+        // 1. Parallel High-Speed Initial Load from Firestore with Timestamp Reconciliation
         const keys = Object.values(STORAGE_KEYS).filter(k => k !== STORAGE_KEYS.CURRENT_USER);
         await Promise.all(keys.map(async (key) => {
             try {
                 const remoteDoc = await pullFromFirestore(key);
+                const localRaw = localStorage.getItem(key);
+                const localUpdatedAt = Number(localStorage.getItem(key + '_updatedAt') || 0);
+
                 if (remoteDoc && remoteDoc.data !== undefined) {
-                    try {
-                        localStorage.setItem(key, JSON.stringify(remoteDoc.data));
-                        localStorage.setItem(key + '_updatedAt', String(remoteDoc.updatedAt || Date.now()));
-                    } catch (e) {}
-                    this._assignLoadedValue(key, remoteDoc.data);
-                } else {
-                    const local = localStorage.getItem(key);
-                    if (local !== null) {
+                    const remoteUpdatedAt = Number(remoteDoc.updatedAt || 0);
+
+                    // If local has newer unsynced changes (e.g. user refreshed right after adding payment)
+                    if (localRaw !== null && localUpdatedAt > remoteUpdatedAt) {
                         try {
-                            const parsed = JSON.parse(local);
-                            this._assignLoadedValue(key, parsed);
-                            pushToFirestore(key, parsed, Date.now());
+                            const localParsed = JSON.parse(localRaw);
+                            this._assignLoadedValue(key, localParsed);
+                            // Push local newer data to cloud
+                            pushToFirestore(key, localParsed, localUpdatedAt);
                         } catch (e) {}
+                    } else {
+                        // Remote is newer or equal -> apply remote data
+                        try {
+                            localStorage.setItem(key, JSON.stringify(remoteDoc.data));
+                            localStorage.setItem(key + '_updatedAt', String(remoteUpdatedAt || Date.now()));
+                        } catch (e) {}
+                        this._assignLoadedValue(key, remoteDoc.data);
                     }
+                } else if (localRaw !== null) {
+                    // Cloud has no doc yet -> seed from local
+                    try {
+                        const localParsed = JSON.parse(localRaw);
+                        this._assignLoadedValue(key, localParsed);
+                        pushToFirestore(key, localParsed, localUpdatedAt || Date.now());
+                    } catch (e) {}
                 }
             } catch (err) {
                 console.warn(`Sync error for key ${key}:`, err);
@@ -364,18 +378,23 @@ class ERPState {
         }
 
         // 2. Real-Time Live Sync: Instantaneous Cross-Device Updates (<1 second)
-        subscribeToFirestore((key, remoteValue) => {
+        subscribeToFirestore((key, remoteValue, remoteUpdatedAt) => {
             if (key === STORAGE_KEYS.CURRENT_USER || remoteValue === null || remoteValue === undefined) return;
-            try {
-                localStorage.setItem(key, JSON.stringify(remoteValue));
-                localStorage.setItem(key + '_updatedAt', String(Date.now()));
-            } catch (e) {}
-            this._assignLoadedValue(key, remoteValue);
+            const localUpdatedAt = Number(localStorage.getItem(key + '_updatedAt') || 0);
 
-            this.notify();
-            if (typeof window !== 'undefined' && this.isAuthenticated()) {
-                if (window.renderCurrentView) window.renderCurrentView();
-                if (window.updateHeaderAndSidebarStats) window.updateHeaderAndSidebarStats();
+            // Accept remote update if remote is newer or equal to local
+            if (Number(remoteUpdatedAt || 0) >= localUpdatedAt) {
+                try {
+                    localStorage.setItem(key, JSON.stringify(remoteValue));
+                    localStorage.setItem(key + '_updatedAt', String(remoteUpdatedAt || Date.now()));
+                } catch (e) {}
+                this._assignLoadedValue(key, remoteValue);
+
+                this.notify();
+                if (typeof window !== 'undefined' && this.isAuthenticated()) {
+                    if (window.renderCurrentView) window.renderCurrentView();
+                    if (window.updateHeaderAndSidebarStats) window.updateHeaderAndSidebarStats();
+                }
             }
         });
     }
