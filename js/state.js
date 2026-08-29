@@ -322,7 +322,7 @@ class ERPState {
     }
 
     /**
-     * Pull all data from Firestore with high-speed parallel loading and smart merging.
+     * Pull all data from Firestore with high-speed parallel loading.
      * Guarantees instantaneous startup and zero-delay cross-device synchronization.
      */
     async initFirebaseSync() {
@@ -337,11 +337,11 @@ class ERPState {
             try {
                 const remoteDoc = await pullFromFirestore(key);
                 if (remoteDoc && remoteDoc.data !== undefined) {
-                    const mergedData = this._mergeLoadedCollection(key, remoteDoc.data);
                     try {
-                        localStorage.setItem(key, JSON.stringify(mergedData));
-                        localStorage.setItem(key + '_updatedAt', String(Date.now()));
+                        localStorage.setItem(key, JSON.stringify(remoteDoc.data));
+                        localStorage.setItem(key + '_updatedAt', String(remoteDoc.updatedAt || Date.now()));
                     } catch (e) {}
+                    this._assignLoadedValue(key, remoteDoc.data);
                 } else {
                     const local = localStorage.getItem(key);
                     if (local !== null) {
@@ -366,11 +366,11 @@ class ERPState {
         // 2. Real-Time Live Sync: Instantaneous Cross-Device Updates (<1 second)
         subscribeToFirestore((key, remoteValue) => {
             if (key === STORAGE_KEYS.CURRENT_USER || remoteValue === null || remoteValue === undefined) return;
-            const mergedData = this._mergeLoadedCollection(key, remoteValue);
             try {
-                localStorage.setItem(key, JSON.stringify(mergedData));
+                localStorage.setItem(key, JSON.stringify(remoteValue));
                 localStorage.setItem(key + '_updatedAt', String(Date.now()));
             } catch (e) {}
+            this._assignLoadedValue(key, remoteValue);
 
             this.notify();
             if (typeof window !== 'undefined' && this.isAuthenticated()) {

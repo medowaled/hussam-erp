@@ -87,20 +87,15 @@ export async function pullFromFirestore(key) {
     }
 }
 
-/**
- * Subscribe to real-time changes across the entire Firestore collection.
- * Uses direct docs traversal to guarantee that every remote change is captured
- * in less than a second on all open screens and devices.
- */
 export function subscribeToFirestore(onDocumentChange) {
     const database = getFirestoreDB();
     if (!database) return null;
     try {
         return database.collection(FIRESTORE_COLLECTION).onSnapshot(
             snapshot => {
-                snapshot.docs.forEach(doc => {
-                    const key = doc.id;
-                    const docData = doc.data();
+                snapshot.docChanges().forEach(change => {
+                    const key = change.doc.id;
+                    const docData = change.doc.data();
                     if (docData && docData.data !== undefined) {
                         onDocumentChange(key, docData.data, Number(docData.updatedAt || 0));
                     }
