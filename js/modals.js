@@ -1816,19 +1816,33 @@ export function showCustomerStatement(customerId, activeFilter = 'all') {
     const chronoSorted = [...invoiceTransactions, ...paymentTransactions].sort((a, b) => a.timestamp - b.timestamp);
 
     const sumDebits = invoiceTransactions.reduce((acc, t) => acc + t.debit, 0);
-    const sumCredits = invoiceTransactions.reduce((acc, t) => acc + t.credit, 0) + paymentTransactions.reduce((acc, t) => acc + t.credit, 0);
+    const sumInvoicesPaid = invoiceTransactions.reduce((acc, t) => acc + t.credit, 0);
+    const sumPaymentsCredit = paymentTransactions.reduce((acc, t) => acc + t.credit, 0);
+    const sumCredits = sumInvoicesPaid + sumPaymentsCredit;
+
     const currentDebt = Number(customer.debt) || 0;
-    const netTransactionsDebt = Math.max(0, sumDebits - sumCredits);
-    const openingBalance = Math.max(0, currentDebt - netTransactionsDebt);
+    const netUnpaidInvoices = Math.max(0, sumDebits - sumInvoicesPaid);
+    const openingBalance = Math.max(0, currentDebt - netUnpaidInvoices + sumPaymentsCredit);
 
     let runningBalance = openingBalance;
     chronoSorted.forEach(t => {
         if (t.type === 'invoice') {
-            runningBalance = Math.max(0, runningBalance + (t.debit - t.credit));
+            if (t.raw && t.raw.totalDebtAfterInvoice !== undefined && t.raw.totalDebtAfterInvoice !== null) {
+                t.runningBalance = Number(t.raw.totalDebtAfterInvoice);
+                runningBalance = t.runningBalance;
+            } else {
+                runningBalance = Math.max(0, runningBalance + (t.debit - t.credit));
+                t.runningBalance = runningBalance;
+            }
         } else if (t.type === 'payment') {
-            runningBalance = Math.max(0, runningBalance - t.credit);
+            if (t.raw && t.raw.debtAfter !== undefined && t.raw.debtAfter !== null) {
+                t.runningBalance = Number(t.raw.debtAfter);
+                runningBalance = t.runningBalance;
+            } else {
+                runningBalance = Math.max(0, runningBalance - t.credit);
+                t.runningBalance = runningBalance;
+            }
         }
-        t.runningBalance = runningBalance;
     });
 
     // 5. Merge and sort newest first for display

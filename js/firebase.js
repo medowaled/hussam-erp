@@ -74,3 +74,32 @@ export async function pullFromFirestore(key) {
         return null;
     }
 }
+
+/**
+ * Subscribe to real-time changes across the entire Firestore collection.
+ * This guarantees instantaneous synchronization between Admin and Delegates.
+ */
+export function subscribeToFirestore(onDocumentChange) {
+    const database = getFirestoreDB();
+    if (!database) return null;
+    try {
+        return database.collection(FIRESTORE_COLLECTION).onSnapshot(
+            snapshot => {
+                snapshot.docChanges().forEach(change => {
+                    const key = change.doc.id;
+                    const docData = change.doc.data();
+                    if (docData && docData.data !== undefined) {
+                        onDocumentChange(key, docData.data, docData.updatedAt || 0, change.type);
+                    }
+                });
+            },
+            err => {
+                console.warn('Firestore real-time sync subscription error:', err);
+            }
+        );
+    } catch (e) {
+        console.warn('Failed to initialize Firestore real-time subscription:', e);
+        return null;
+    }
+}
+

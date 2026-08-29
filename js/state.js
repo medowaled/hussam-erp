@@ -4,7 +4,7 @@
  * State changes sync to LocalStorage (fast cache) and Firestore (cloud DB).
  */
 
-import { getFirestoreDB, pushToFirestore, pullFromFirestore } from './firebase.js';
+import { getFirestoreDB, pushToFirestore, pullFromFirestore, subscribeToFirestore } from './firebase.js';
 
 const STORAGE_KEYS = {
     PRODUCTS: 'hussam_erp_products_v2.5',
@@ -145,15 +145,36 @@ class ERPState {
      * Assign a raw value pulled from Firestore back into the in-memory state.
      */
     _assignLoadedValue(key, value) {
+        if (!value && value !== 0) return;
         switch (key) {
             case STORAGE_KEYS.PRODUCTS:        this.products = value;        break;
             case STORAGE_KEYS.CUSTOMERS:       this.customers = value;       break;
-            case STORAGE_KEYS.INVOICES:        this.invoices = value;        break;
+            case STORAGE_KEYS.INVOICES:
+                this.invoices = Array.isArray(value) ? value.map(inv => {
+                    const items = inv.items || [];
+                    const totalCost = inv.totalCost !== undefined ? inv.totalCost : items.reduce((sum, item) => {
+                        const bPrice = (item.buyPrice !== undefined && item.buyPrice !== null) ? Number(item.buyPrice) : Math.max(0, (item.unitPrice || 0) - 5);
+                        return sum + (bPrice * item.qty);
+                    }, 0);
+                    const grandTotal = Number(inv.grandTotal) || 0;
+                    const netProfit = inv.netProfit !== undefined ? inv.netProfit : Math.max(0, grandTotal - totalCost);
+                    return { ...inv, totalCost, netProfit };
+                }) : [];
+                break;
             case STORAGE_KEYS.NOTIFICATIONS:   this.notifications = value;   break;
-            case STORAGE_KEYS.USERS:           this.users = value;           break;
+            case STORAGE_KEYS.USERS:
+                this.users = value;
+                if (this.currentUser) {
+                    const freshUser = this.users.find(u => u.id === this.currentUser.id);
+                    if (freshUser) {
+                        this.currentUser = { ...this.currentUser, ...freshUser };
+                        try { sessionStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(this.currentUser)); } catch (e) {}
+                    }
+                }
+                break;
             case STORAGE_KEYS.CART:            this.cart = value;            break;
-            case STORAGE_KEYS.CURRENT_USER:        this.currentUser = value;     break;
-            case STORAGE_KEYS.CASH_ON_HAND:        this.cashOnHand = value;      break;
+            case STORAGE_KEYS.CURRENT_USER:    this.currentUser = value;     break;
+            case STORAGE_KEYS.CASH_ON_HAND:    this.cashOnHand = Number(value) || 0; break;
             case STORAGE_KEYS.DELEGATE_COLLECTIONS: this.delegateCollections = value || []; break;
             case STORAGE_KEYS.CUSTOMER_PAYMENTS:    this.customerPayments = value || [];   break;
         }
@@ -161,8 +182,9 @@ class ERPState {
 
     /**
      * Pull all data from Firestore (cloud wins) and seed Firebase with local
-     * data when it is empty. Called once at application startup. Falls back
-     * silently to localStorage when Firebase is unreachable or not configured.
+     * data when it is empty. Also establishes a real-time live listener (onSnapshot)
+     * so that any action performed by a delegate immediately reflects on the admin screen
+     * and vice versa without page reloads or data overwrites.
      */
     async initFirebaseSync() {
         if (!getFirestoreDB()) {
@@ -170,16 +192,14 @@ class ERPState {
             return;
         }
 
-        // CURRENT_USER (login session) is device-local and never synced
+        // 1. Initial load from Firestore
         const keys = Object.values(STORAGE_KEYS).filter(k => k !== STORAGE_KEYS.CURRENT_USER);
         for (const key of keys) {
             const remote = await pullFromFirestore(key);
             if (remote !== null && remote !== undefined) {
-                // Cloud has data → use it and refresh the local cache
                 try { localStorage.setItem(key, JSON.stringify(remote)); } catch (e) {}
                 this._assignLoadedValue(key, remote);
             } else {
-                // Cloud is empty → seed it with the current local data
                 const local = localStorage.getItem(key);
                 if (local !== null) {
                     try { await pushToFirestore(key, JSON.parse(local)); } catch (e) {}
@@ -192,6 +212,19 @@ class ERPState {
         if (typeof window !== 'undefined' && window.renderAppLayout) {
             window.renderAppLayout();
         }
+
+        // 2. Real-Time Live Sync: Listen for remote changes from other users/devices
+        subscribeToFirestore((key, remoteValue) => {
+            if (key === STORAGE_KEYS.CURRENT_USER || remoteValue === null || remoteValue === undefined) return;
+            try { localStorage.setItem(key, JSON.stringify(remoteValue)); } catch (e) {}
+            this._assignLoadedValue(key, remoteValue);
+            this.checkStockThresholds();
+            this.notify();
+            if (typeof window !== 'undefined') {
+                if (window.renderCurrentView) window.renderCurrentView();
+                if (window.updateHeaderAndSidebarStats) window.updateHeaderAndSidebarStats();
+            }
+        });
     }
 
     subscribe(listener) {
