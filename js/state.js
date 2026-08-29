@@ -183,7 +183,135 @@ class ERPState {
     }
 
     /**
-     * Pull all data from Firestore with timestamp reconciliation.
+     * Merge remote data with local state intelligently without losing any local/remote records.
+     */
+    _mergeLoadedCollection(key, remoteData) {
+        if (!remoteData && remoteData !== 0) return;
+
+        switch (key) {
+            case STORAGE_KEYS.CUSTOMER_PAYMENTS: {
+                const localList = Array.isArray(this.customerPayments) ? this.customerPayments : [];
+                const remoteList = Array.isArray(remoteData) ? remoteData : [];
+                const mergedMap = new Map();
+                // Combine both lists, newest first
+                [...localList, ...remoteList].forEach(p => {
+                    const id = String(p.id || p.voucherNumber);
+                    if (id && !mergedMap.has(id)) {
+                        mergedMap.set(id, p);
+                    }
+                });
+                const merged = Array.from(mergedMap.values()).sort((a, b) => {
+                    const tA = a.id || (a.date ? new Date(a.date).getTime() : 0) || 0;
+                    const tB = b.id || (b.date ? new Date(b.date).getTime() : 0) || 0;
+                    return tB - tA;
+                });
+                this.customerPayments = merged;
+                return merged;
+            }
+
+            case STORAGE_KEYS.CUSTOMERS: {
+                const localList = Array.isArray(this.customers) ? this.customers : [];
+                const remoteList = Array.isArray(remoteData) ? remoteData : [];
+                const mergedMap = new Map();
+
+                // Add remote customers
+                remoteList.forEach(c => {
+                    if (c && c.id !== undefined) mergedMap.set(String(c.id), { ...c });
+                });
+
+                // Merge local customers: if local has more paidAmount or lower debt, local wins for that customer
+                localList.forEach(localC => {
+                    if (!localC || localC.id === undefined) return;
+                    const idStr = String(localC.id);
+                    const remoteC = mergedMap.get(idStr);
+                    if (!remoteC) {
+                        mergedMap.set(idStr, { ...localC });
+                    } else {
+                        const localPaid = Number(localC.paidAmount) || 0;
+                        const remotePaid = Number(remoteC.paidAmount) || 0;
+                        const localPurchases = Number(localC.totalPurchases) || 0;
+                        const remotePurchases = Number(remoteC.totalPurchases) || 0;
+
+                        if (localPaid > remotePaid || (localPaid === remotePaid && Number(localC.debt) < Number(remoteC.debt))) {
+                            mergedMap.set(idStr, { ...remoteC, ...localC });
+                        } else if (localPurchases > remotePurchases) {
+                            mergedMap.set(idStr, { ...remoteC, ...localC });
+                        }
+                    }
+                });
+
+                this.customers = Array.from(mergedMap.values());
+                return this.customers;
+            }
+
+            case STORAGE_KEYS.INVOICES: {
+                const localList = Array.isArray(this.invoices) ? this.invoices : [];
+                const remoteList = Array.isArray(remoteData) ? remoteData : [];
+                const mergedMap = new Map();
+                [...localList, ...remoteList].forEach(inv => {
+                    const id = String(inv.id || inv.invoiceNumber);
+                    if (id && !mergedMap.has(id)) {
+                        const items = inv.items || [];
+                        const totalCost = inv.totalCost !== undefined ? inv.totalCost : items.reduce((sum, item) => {
+                            const bPrice = (item.buyPrice !== undefined && item.buyPrice !== null) ? Number(item.buyPrice) : Math.max(0, (item.unitPrice || 0) - 5);
+                            return sum + (bPrice * item.qty);
+                        }, 0);
+                        const grandTotal = Number(inv.grandTotal) || 0;
+                        const netProfit = inv.netProfit !== undefined ? inv.netProfit : Math.max(0, grandTotal - totalCost);
+                        mergedMap.set(id, { ...inv, totalCost, netProfit });
+                    }
+                });
+                const merged = Array.from(mergedMap.values()).sort((a, b) => (b.id || 0) - (a.id || 0));
+                this.invoices = merged;
+                return merged;
+            }
+
+            case STORAGE_KEYS.PRODUCTS: {
+                const localList = Array.isArray(this.products) ? this.products : [];
+                const remoteList = Array.isArray(remoteData) ? remoteData : [];
+                const mergedMap = new Map();
+                remoteList.forEach(p => { if (p && p.id) mergedMap.set(String(p.id), p); });
+                localList.forEach(p => { if (p && p.id && !mergedMap.has(String(p.id))) mergedMap.set(String(p.id), p); });
+                this.products = Array.from(mergedMap.values());
+                return this.products;
+            }
+
+            case STORAGE_KEYS.USERS: {
+                const localList = Array.isArray(this.users) ? this.users : [];
+                const remoteList = Array.isArray(remoteData) ? remoteData : [];
+                const mergedMap = new Map();
+                remoteList.forEach(u => { if (u && u.id) mergedMap.set(String(u.id), u); });
+                localList.forEach(u => {
+                    if (u && u.id) {
+                        const r = mergedMap.get(String(u.id));
+                        if (!r) {
+                            mergedMap.set(String(u.id), u);
+                        } else {
+                            const lCash = Number(u.delegateCashHand) || 0;
+                            const rCash = Number(r.delegateCashHand) || 0;
+                            mergedMap.set(String(u.id), { ...r, delegateCashHand: Math.max(lCash, rCash) });
+                        }
+                    }
+                });
+                this.users = Array.from(mergedMap.values());
+                if (this.currentUser) {
+                    const freshUser = this.users.find(u => u.id === this.currentUser.id);
+                    if (freshUser) {
+                        this.currentUser = { ...this.currentUser, ...freshUser };
+                        try { sessionStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(this.currentUser)); } catch (e) {}
+                    }
+                }
+                return this.users;
+            }
+
+            default:
+                this._assignLoadedValue(key, remoteData);
+                return remoteData;
+        }
+    }
+
+    /**
+     * Pull all data from Firestore with smart merging.
      * Guarantees that local edits are never overwritten by older cloud data on refresh.
      */
     async initFirebaseSync() {
@@ -192,36 +320,27 @@ class ERPState {
             return;
         }
 
-        // 1. Initial load from Firestore (Timestamp-checked reconciliation)
+        // 1. Initial load from Firestore (Smart Merge)
         const keys = Object.values(STORAGE_KEYS).filter(k => k !== STORAGE_KEYS.CURRENT_USER);
         for (const key of keys) {
             const remoteDoc = await pullFromFirestore(key);
-            const localRaw = localStorage.getItem(key);
-            const localUpdatedAt = Number(localStorage.getItem(key + '_updatedAt') || 0);
-
             if (remoteDoc && remoteDoc.data !== undefined) {
-                const remoteUpdatedAt = Number(remoteDoc.updatedAt || 0);
-                if (localRaw !== null && localUpdatedAt > remoteUpdatedAt) {
-                    // Local changes are NEWER than cloud (e.g. made right before refresh)
-                    try {
-                        const parsed = JSON.parse(localRaw);
-                        this._assignLoadedValue(key, parsed);
-                        pushToFirestore(key, parsed, localUpdatedAt);
-                    } catch (e) {}
-                } else {
-                    // Cloud has latest data -> update local cache & in-memory state
-                    try {
-                        localStorage.setItem(key, JSON.stringify(remoteDoc.data));
-                        localStorage.setItem(key + '_updatedAt', String(remoteUpdatedAt));
-                    } catch (e) {}
-                    this._assignLoadedValue(key, remoteDoc.data);
-                }
-            } else if (localRaw !== null) {
-                // Cloud is empty -> seed with current local data
+                const mergedData = this._mergeLoadedCollection(key, remoteDoc.data);
                 try {
-                    const parsed = JSON.parse(localRaw);
-                    pushToFirestore(key, parsed, localUpdatedAt || Date.now());
+                    localStorage.setItem(key, JSON.stringify(mergedData));
+                    localStorage.setItem(key + '_updatedAt', String(Date.now()));
                 } catch (e) {}
+                // Ensure cloud is updated with any merged additions
+                pushToFirestore(key, mergedData, Date.now());
+            } else {
+                const local = localStorage.getItem(key);
+                if (local !== null) {
+                    try {
+                        const parsed = JSON.parse(local);
+                        this._assignLoadedValue(key, parsed);
+                        pushToFirestore(key, parsed, Date.now());
+                    } catch (e) {}
+                }
             }
         }
 
@@ -233,18 +352,13 @@ class ERPState {
 
         // 2. Real-Time Live Sync: Listen for remote changes from other users/devices
         let _syncDebounceTimer = null;
-        subscribeToFirestore((key, remoteValue, remoteUpdatedAt) => {
+        subscribeToFirestore((key, remoteValue) => {
             if (key === STORAGE_KEYS.CURRENT_USER || remoteValue === null || remoteValue === undefined) return;
-            const localUpdatedAt = Number(localStorage.getItem(key + '_updatedAt') || 0);
-            if (Number(remoteUpdatedAt || 0) < localUpdatedAt) {
-                // Ignore older remote echoes
-                return;
-            }
+            const mergedData = this._mergeLoadedCollection(key, remoteValue);
             try {
-                localStorage.setItem(key, JSON.stringify(remoteValue));
-                localStorage.setItem(key + '_updatedAt', String(remoteUpdatedAt || Date.now()));
+                localStorage.setItem(key, JSON.stringify(mergedData));
+                localStorage.setItem(key + '_updatedAt', String(Date.now()));
             } catch (e) {}
-            this._assignLoadedValue(key, remoteValue);
 
             if (_syncDebounceTimer) clearTimeout(_syncDebounceTimer);
             _syncDebounceTimer = setTimeout(() => {
