@@ -380,21 +380,16 @@ class ERPState {
         // 2. Real-Time Live Sync: Instantaneous Cross-Device Updates (<1 second)
         subscribeToFirestore((key, remoteValue, remoteUpdatedAt) => {
             if (key === STORAGE_KEYS.CURRENT_USER || remoteValue === null || remoteValue === undefined) return;
-            const localUpdatedAt = Number(localStorage.getItem(key + '_updatedAt') || 0);
+            try {
+                localStorage.setItem(key, JSON.stringify(remoteValue));
+                localStorage.setItem(key + '_updatedAt', String(remoteUpdatedAt || Date.now()));
+            } catch (e) {}
+            this._assignLoadedValue(key, remoteValue);
 
-            // Accept remote update if remote is newer or equal to local
-            if (Number(remoteUpdatedAt || 0) >= localUpdatedAt) {
-                try {
-                    localStorage.setItem(key, JSON.stringify(remoteValue));
-                    localStorage.setItem(key + '_updatedAt', String(remoteUpdatedAt || Date.now()));
-                } catch (e) {}
-                this._assignLoadedValue(key, remoteValue);
-
-                this.notify();
-                if (typeof window !== 'undefined' && this.isAuthenticated()) {
-                    if (window.renderCurrentView) window.renderCurrentView();
-                    if (window.updateHeaderAndSidebarStats) window.updateHeaderAndSidebarStats();
-                }
+            this.notify();
+            if (typeof window !== 'undefined' && this.isAuthenticated()) {
+                if (window.renderCurrentView) window.renderCurrentView();
+                if (window.updateHeaderAndSidebarStats) window.updateHeaderAndSidebarStats();
             }
         });
     }
