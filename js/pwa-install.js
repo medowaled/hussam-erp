@@ -1,9 +1,21 @@
-// Register Service Worker for PWA compliance
+// Register Service Worker for PWA compliance and auto-update
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('PWA Service Worker registered:', reg.scope))
-            .catch(err => console.log('Service Worker registration failed:', err));
+            .then(reg => {
+                reg.update();
+                reg.onupdatefound = () => {
+                    const installingWorker = reg.installing;
+                    if (installingWorker) {
+                        installingWorker.onstatechange = () => {
+                            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                window.location.reload();
+                            }
+                        };
+                    }
+                };
+            })
+            .catch(err => console.warn('Service Worker registration failed:', err));
     });
 }
 

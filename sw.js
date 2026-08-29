@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hussam-erp-v2.5-cache';
+const CACHE_NAME = 'hussam-erp-v2.6-live-sync';
 const urlsToCache = [
   './',
   './index.html',
@@ -12,23 +12,26 @@ const urlsToCache = [
   './css/print.css',
   './js/app.js',
   './js/state.js',
+  './js/firebase.js',
   './js/modals.js',
   './js/pwa-install.js',
   './js/views/dashboard.js',
   './js/views/pos.js',
   './js/views/inventory.js',
   './js/views/customers.js',
-  './js/views/employees.js',
-  './js/views/reports.js'
+  './js/views/reports.js',
+  './js/views/settings.js',
+  './js/views/login.js',
+  './js/views/notifications.js'
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(urlsToCache);
-    }).catch(err => console.log('SW Cache add error:', err))
+    }).catch(err => console.warn('SW Cache error:', err))
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -45,10 +48,22 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Network-First strategy: fetch latest live code from server, fallback to cache offline
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
-    })
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return networkResponse;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
+
