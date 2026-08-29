@@ -202,7 +202,9 @@ window.renderAppLayout = () => {
         if (appContainer) appContainer.style.display = 'block';
 
         const container = document.getElementById('view-container');
-        if (container) container.innerHTML = renderLoginView();
+        if (container && !document.getElementById('login-form')) {
+            container.innerHTML = renderLoginView();
+        }
     } else {
         // User logged in -> Restore full ERP Layout
         if (header) header.style.display = 'flex';

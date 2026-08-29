@@ -209,7 +209,7 @@ class ERPState {
 
         this.checkStockThresholds();
         this.notify();
-        if (typeof window !== 'undefined' && window.renderAppLayout) {
+        if (typeof window !== 'undefined' && this.isAuthenticated() && window.renderAppLayout) {
             window.renderAppLayout();
         }
 
@@ -220,7 +220,7 @@ class ERPState {
             this._assignLoadedValue(key, remoteValue);
             this.checkStockThresholds();
             this.notify();
-            if (typeof window !== 'undefined') {
+            if (typeof window !== 'undefined' && this.isAuthenticated()) {
                 if (window.renderCurrentView) window.renderCurrentView();
                 if (window.updateHeaderAndSidebarStats) window.updateHeaderAndSidebarStats();
             }
