@@ -119,6 +119,7 @@ class ERPState {
     }
 
     save(key, data) {
+        const now = Date.now();
         try {
             if (key === STORAGE_KEYS.CURRENT_USER) {
                 if (data) {
@@ -129,6 +130,7 @@ class ERPState {
                 localStorage.removeItem(key);
             } else {
                 localStorage.setItem(key, JSON.stringify(data));
+                localStorage.setItem(key + '_updatedAt', String(now));
             }
             this.notify();
         } catch (e) {
@@ -137,7 +139,7 @@ class ERPState {
         // Cloud sync: business data only. The logged-in session (CURRENT_USER)
         // stays on this device so opening the site never auto-logs-in.
         if (key !== STORAGE_KEYS.CURRENT_USER) {
-            pushToFirestore(key, data);
+            pushToFirestore(key, data, now);
         }
     }
 
@@ -181,10 +183,8 @@ class ERPState {
     }
 
     /**
-     * Pull all data from Firestore (cloud wins) and seed Firebase with local
-     * data when it is empty. Also establishes a real-time live listener (onSnapshot)
-     * so that any action performed by a delegate immediately reflects on the admin screen
-     * and vice versa without page reloads or data overwrites.
+     * Pull all data from Firestore with timestamp reconciliation.
+     * Guarantees that local edits are never overwritten by older cloud data on refresh.
      */
     async initFirebaseSync() {
         if (!getFirestoreDB()) {
@@ -192,18 +192,36 @@ class ERPState {
             return;
         }
 
-        // 1. Initial load from Firestore
+        // 1. Initial load from Firestore (Timestamp-checked reconciliation)
         const keys = Object.values(STORAGE_KEYS).filter(k => k !== STORAGE_KEYS.CURRENT_USER);
         for (const key of keys) {
-            const remote = await pullFromFirestore(key);
-            if (remote !== null && remote !== undefined) {
-                try { localStorage.setItem(key, JSON.stringify(remote)); } catch (e) {}
-                this._assignLoadedValue(key, remote);
-            } else {
-                const local = localStorage.getItem(key);
-                if (local !== null) {
-                    try { await pushToFirestore(key, JSON.parse(local)); } catch (e) {}
+            const remoteDoc = await pullFromFirestore(key);
+            const localRaw = localStorage.getItem(key);
+            const localUpdatedAt = Number(localStorage.getItem(key + '_updatedAt') || 0);
+
+            if (remoteDoc && remoteDoc.data !== undefined) {
+                const remoteUpdatedAt = Number(remoteDoc.updatedAt || 0);
+                if (localRaw !== null && localUpdatedAt > remoteUpdatedAt) {
+                    // Local changes are NEWER than cloud (e.g. made right before refresh)
+                    try {
+                        const parsed = JSON.parse(localRaw);
+                        this._assignLoadedValue(key, parsed);
+                        pushToFirestore(key, parsed, localUpdatedAt);
+                    } catch (e) {}
+                } else {
+                    // Cloud has latest data -> update local cache & in-memory state
+                    try {
+                        localStorage.setItem(key, JSON.stringify(remoteDoc.data));
+                        localStorage.setItem(key + '_updatedAt', String(remoteUpdatedAt));
+                    } catch (e) {}
+                    this._assignLoadedValue(key, remoteDoc.data);
                 }
+            } else if (localRaw !== null) {
+                // Cloud is empty -> seed with current local data
+                try {
+                    const parsed = JSON.parse(localRaw);
+                    pushToFirestore(key, parsed, localUpdatedAt || Date.now());
+                } catch (e) {}
             }
         }
 
@@ -215,9 +233,17 @@ class ERPState {
 
         // 2. Real-Time Live Sync: Listen for remote changes from other users/devices
         let _syncDebounceTimer = null;
-        subscribeToFirestore((key, remoteValue) => {
+        subscribeToFirestore((key, remoteValue, remoteUpdatedAt) => {
             if (key === STORAGE_KEYS.CURRENT_USER || remoteValue === null || remoteValue === undefined) return;
-            try { localStorage.setItem(key, JSON.stringify(remoteValue)); } catch (e) {}
+            const localUpdatedAt = Number(localStorage.getItem(key + '_updatedAt') || 0);
+            if (Number(remoteUpdatedAt || 0) < localUpdatedAt) {
+                // Ignore older remote echoes
+                return;
+            }
+            try {
+                localStorage.setItem(key, JSON.stringify(remoteValue));
+                localStorage.setItem(key + '_updatedAt', String(remoteUpdatedAt || Date.now()));
+            } catch (e) {}
             this._assignLoadedValue(key, remoteValue);
 
             if (_syncDebounceTimer) clearTimeout(_syncDebounceTimer);

@@ -47,13 +47,15 @@ export function getFirestoreDB() {
 }
 
 /** Write one storage key into Firestore (document = key name). */
-export async function pushToFirestore(key, value) {
+export async function pushToFirestore(key, value, updatedAt = Date.now()) {
     const database = getFirestoreDB();
     if (!database) return false;
     try {
+        // Clean JSON data to eliminate undefined values which Firestore rejects
+        const cleanData = JSON.parse(JSON.stringify(value));
         await database.collection(FIRESTORE_COLLECTION).doc(key).set({
-            data: value,
-            updatedAt: Date.now()
+            data: cleanData,
+            updatedAt: updatedAt || Date.now()
         });
         return true;
     } catch (e) {
@@ -68,7 +70,12 @@ export async function pullFromFirestore(key) {
     if (!database) return null;
     try {
         const doc = await database.collection(FIRESTORE_COLLECTION).doc(key).get();
-        return doc.exists ? doc.data().data : null;
+        if (!doc.exists) return null;
+        const d = doc.data();
+        return {
+            data: d.data,
+            updatedAt: Number(d.updatedAt || 0)
+        };
     } catch (e) {
         console.error('Firestore read error:', e);
         return null;
