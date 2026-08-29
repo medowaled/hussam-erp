@@ -135,3 +135,34 @@ export function subscribeToFirestore(onDocumentChange) {
     }
 }
 
+export async function testFirebaseSync() {
+    const database = getFirestoreDB();
+    if (!database) {
+        alert('❌ Firebase SDK غير متصل أو لم يتم تحميله بعد!');
+        return false;
+    }
+    try {
+        const testId = 'test_' + Date.now();
+        await database.collection(FIRESTORE_COLLECTION).doc('_sync_health').set({
+            testId,
+            time: new Date().toISOString()
+        });
+        const readBack = await database.collection(FIRESTORE_COLLECTION).doc('_sync_health').get();
+        if (readBack.exists && readBack.data().testId === testId) {
+            alert('✅ الاتصال السحابي بـ Firebase يعمل 100%! الكتابة والقراءة السحابية المباشرة ناجحة ومفعلة.');
+            return true;
+        } else {
+            alert('⚠️ تم الإرسال ولكن لم يتم تأكيد القراءة السحابية.');
+            return false;
+        }
+    } catch (err) {
+        console.error('Firebase test error:', err);
+        alert(`❌ تنبيه من فايربيس (Firebase Error):\n• الكود: ${err.code || 'غير معروف'}\n• الرسالة: ${err.message}\n\n💡 الحل: يرجى الدخول إلى Firebase Console ➔ Firestore Database ➔ Rules والتأكد من تفعيل:\nallow read, write: if true;\nثم الضغط على Publish.`);
+        return false;
+    }
+}
+if (typeof window !== 'undefined') {
+    window.testFirebaseSync = testFirebaseSync;
+}
+
+

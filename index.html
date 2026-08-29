@@ -134,7 +134,7 @@
 
                 <div class="header-actions">
                     <!-- Live Cloud Sync Status Indicator -->
-                    <div id="cloud-sync-badge" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; border-radius: 20px; font-size: 0.72rem; font-weight: 800; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);" title="حالة الاتصال السحابي الحية">
+                    <div id="cloud-sync-badge" onclick="window.testFirebaseSync && window.testFirebaseSync()" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; border-radius: 20px; font-size: 0.72rem; font-weight: 800; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); cursor: pointer;" title="اضغط هنا لاختبار اتصال السحابة ومزامنة البيانات">
                         <span id="cloud-sync-dot" style="width: 7px; height: 7px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
                         <span id="cloud-sync-text">سحابي متصل ⚡</span>
                     </div>
