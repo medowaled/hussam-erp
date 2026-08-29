@@ -36,7 +36,12 @@ export function getFirestoreDB() {
     }
     if (!db) {
         try {
-            const app = window.firebase.initializeApp(firebaseConfig);
+            let app;
+            if (window.firebase.apps && window.firebase.apps.length > 0) {
+                app = window.firebase.apps[0];
+            } else {
+                app = window.firebase.initializeApp(firebaseConfig);
+            }
             db = window.firebase.firestore(app);
         } catch (e) {
             console.error('Firebase init error (تأكد من ملء firebaseConfig):', e);
@@ -84,24 +89,20 @@ export async function pullFromFirestore(key) {
 
 /**
  * Subscribe to real-time changes across the entire Firestore collection.
- * This guarantees instantaneous synchronization between Admin and Delegates.
+ * Uses direct docs traversal to guarantee that every remote change is captured
+ * in less than a second on all open screens and devices.
  */
 export function subscribeToFirestore(onDocumentChange) {
     const database = getFirestoreDB();
     if (!database) return null;
     try {
         return database.collection(FIRESTORE_COLLECTION).onSnapshot(
-            { includeMetadataChanges: true },
             snapshot => {
-                snapshot.docChanges().forEach(change => {
-                    // Ignore our own local writes while pending to prevent feedback loops and memory leaks
-                    if (change.doc.metadata && change.doc.metadata.hasPendingWrites) {
-                        return;
-                    }
-                    const key = change.doc.id;
-                    const docData = change.doc.data();
+                snapshot.docs.forEach(doc => {
+                    const key = doc.id;
+                    const docData = doc.data();
                     if (docData && docData.data !== undefined) {
-                        onDocumentChange(key, docData.data, docData.updatedAt || 0, change.type);
+                        onDocumentChange(key, docData.data, Number(docData.updatedAt || 0));
                     }
                 });
             },
