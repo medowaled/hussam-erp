@@ -314,8 +314,14 @@ let _chartSalesTrend = null;
 let _chartMargin     = null;
 
 export function initDashboardCharts() {
-    if (_chartSalesTrend) { _chartSalesTrend.destroy(); _chartSalesTrend = null; }
-    if (_chartMargin)     { _chartMargin.destroy();     _chartMargin     = null; }
+    if (_chartSalesTrend) {
+        try { _chartSalesTrend.destroy(); } catch (e) {}
+        _chartSalesTrend = null;
+    }
+    if (_chartMargin) {
+        try { _chartMargin.destroy(); } catch (e) {}
+        _chartMargin = null;
+    }
 
     if (!window.Chart) return;
 

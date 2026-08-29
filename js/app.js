@@ -161,7 +161,9 @@ window.renderCurrentView = () => {
             container.innerHTML = viewsMap[currentViewName]();
             // Initialize charts after DOM is injected
             if (currentViewName === 'dashboard') {
-                requestAnimationFrame(() => initDashboardCharts());
+                setTimeout(() => {
+                    if (currentViewName === 'dashboard') initDashboardCharts();
+                }, 60);
             }
             if (scrollY > 0 || scrollX > 0) {
                 window.scrollTo(scrollX, scrollY);

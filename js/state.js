@@ -214,16 +214,21 @@ class ERPState {
         }
 
         // 2. Real-Time Live Sync: Listen for remote changes from other users/devices
+        let _syncDebounceTimer = null;
         subscribeToFirestore((key, remoteValue) => {
             if (key === STORAGE_KEYS.CURRENT_USER || remoteValue === null || remoteValue === undefined) return;
             try { localStorage.setItem(key, JSON.stringify(remoteValue)); } catch (e) {}
             this._assignLoadedValue(key, remoteValue);
             this.checkStockThresholds();
-            this.notify();
-            if (typeof window !== 'undefined' && this.isAuthenticated()) {
-                if (window.renderCurrentView) window.renderCurrentView();
-                if (window.updateHeaderAndSidebarStats) window.updateHeaderAndSidebarStats();
-            }
+
+            if (_syncDebounceTimer) clearTimeout(_syncDebounceTimer);
+            _syncDebounceTimer = setTimeout(() => {
+                this.notify();
+                if (typeof window !== 'undefined' && this.isAuthenticated()) {
+                    if (window.renderCurrentView) window.renderCurrentView();
+                    if (window.updateHeaderAndSidebarStats) window.updateHeaderAndSidebarStats();
+                }
+            }, 250);
         });
     }
 
