@@ -110,11 +110,10 @@ export function subscribeToFirestore(onDocumentChange) {
                 if (typeof window !== 'undefined' && window.updateCloudSyncBadge) {
                     window.updateCloudSyncBadge(true);
                 }
-                snapshot.docChanges().forEach(change => {
-                    const key = change.doc.id;
-                    const docData = change.doc.data();
+                snapshot.docs.forEach(doc => {
+                    const key = doc.id;
+                    const docData = doc.data();
                     if (docData && docData.data !== undefined) {
-                        console.log(`[Cloud Sync 🔄 Event] Remote update received for ${key}`);
                         onDocumentChange(key, docData.data, Number(docData.updatedAt || 0));
                     }
                 });
