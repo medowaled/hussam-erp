@@ -79,12 +79,12 @@ function renderCartItemHtml(item) {
                     <input
                         type="number"
                         inputmode="numeric"
-                        pattern="[0-9]*"
                         id="qty-input-${item.productId}"
                         class="qty-value-input"
                         value="${item.qty}"
                         min="1"
                         aria-label="كمية ${item.name}"
+                        onfocus="this.select()"
                         oninput="window.posUpdateQtyInline(${item.productId}, this)"
                         onblur="window.posCommitQtyInput(${item.productId}, this)"
                         onkeydown="if(event.key==='Enter'){this.blur();}"
@@ -869,15 +869,11 @@ window.posUpdateQtyInline = (productId, inputEl) => {
     const val = Number(raw);
     if (isNaN(val) || val <= 0) return;
 
-    const product = state.products.find(p => p.id === productId);
-    if (!product) return;
-
-    const finalQty = Math.min(Math.floor(val), product.stockPacks);
-    const cartItem = state.cart.find(i => i.productId === productId);
+    const finalQty = Math.max(1, Math.floor(val));
+    const cartItem = state.cart.find(i => Number(i.productId) === Number(productId));
     if (cartItem) {
         cartItem.qty = finalQty;
         state.save('hussam_erp_cart_v2.5', state.cart);
-        inputEl.value = finalQty;
     }
 
     const itemTotalEl = document.getElementById(`cart-item-total-${productId}`);
@@ -889,6 +885,16 @@ window.posUpdateQtyInline = (productId, inputEl) => {
     if (badgeEl) {
         const totalQty = state.cart.reduce((sum, i) => sum + i.qty, 0);
         badgeEl.innerText = `${totalQty} أصناف في السلة`;
+    }
+
+    const mobileBar = document.querySelector('.mobile-floating-cart-bar');
+    if (mobileBar) {
+        const totalQty = state.cart.reduce((sum, i) => sum + i.qty, 0);
+        const subtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.qty), 0);
+        const labelEl = mobileBar.querySelector('.mobile-cart-bar-label');
+        if (labelEl) labelEl.innerText = `الفاتورة والسلة (${totalQty} أصناف)`;
+        const totalEl = mobileBar.querySelector('.mobile-cart-bar-total');
+        if (totalEl) totalEl.innerText = `${subtotal} ج.م`;
     }
 
     window.posRecalculateTotals();
@@ -906,7 +912,9 @@ window.posCommitQtyInput = (productId, inputEl) => {
         return;
     }
 
-    window.posUpdateQty(productId, val, false);
+    const finalQty = Math.max(1, Math.floor(val));
+    inputEl.value = finalQty;
+    window.posUpdateQty(productId, finalQty, false);
 };
 
 window.posUpdateQty = (productId, qtyOrDelta, isDelta = false) => {
@@ -920,10 +928,7 @@ window.posUpdateQty = (productId, qtyOrDelta, isDelta = false) => {
         return;
     }
 
-    const product = state.products.find(p => Number(p.id) === Number(productId));
-    if (!product) return;
-
-    const finalQty = Math.min(targetQty, product.stockPacks);
+    const finalQty = Math.max(1, Math.floor(targetQty));
     state.updateCartQty(productId, finalQty);
 
     // Update Input value smoothly in DOM

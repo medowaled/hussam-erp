@@ -1,6 +1,6 @@
 import { state } from '../state.js';
 
-let activeReportTab = 'position';
+let activeReportTab = 'invoices';
 let activeSellerFilter = 'all';
 let reportSearchQuery = '';
 
