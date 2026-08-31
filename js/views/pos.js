@@ -77,15 +77,16 @@ function renderCartItemHtml(item) {
                 <div class="qty-stepper">
                     <button type="button" class="qty-step-btn" onclick="window.posUpdateQty(${item.productId}, -1, true)" aria-label="تقليل الكمية">−</button>
                     <input
-                        type="number"
+                        type="text"
                         inputmode="numeric"
                         id="qty-input-${item.productId}"
                         class="qty-value-input"
                         value="${item.qty}"
-                        min="1"
                         aria-label="كمية ${item.name}"
                         onfocus="this.select()"
+                        onclick="this.select()"
                         oninput="window.posUpdateQtyInline(${item.productId}, this)"
+                        onchange="window.posCommitQtyInput(${item.productId}, this)"
                         onblur="window.posCommitQtyInput(${item.productId}, this)"
                         onkeydown="if(event.key==='Enter'){this.blur();}"
                     >
@@ -863,13 +864,16 @@ window.posAddToCart = (productId) => {
 };
 
 window.posUpdateQtyInline = (productId, inputEl) => {
-    const raw = String(inputEl.value).trim();
+    let raw = String(inputEl.value || '').trim();
+    raw = raw.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+    raw = raw.replace(/[^0-9]/g, '');
+
     if (raw === '') return;
 
-    const val = Number(raw);
+    const val = parseInt(raw, 10);
     if (isNaN(val) || val <= 0) return;
 
-    const finalQty = Math.max(1, Math.floor(val));
+    const finalQty = Math.max(1, val);
     const cartItem = state.cart.find(i => Number(i.productId) === Number(productId));
     if (cartItem) {
         cartItem.qty = finalQty;
@@ -901,18 +905,25 @@ window.posUpdateQtyInline = (productId, inputEl) => {
 };
 
 window.posCommitQtyInput = (productId, inputEl) => {
-    const raw = String(inputEl.value).trim();
-    const val = Number(raw);
-    const cartItem = state.cart.find(i => Number(i.productId) === Number(productId));
+    let raw = String(inputEl.value || '').trim();
+    raw = raw.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+    raw = raw.replace(/[^0-9]/g, '');
 
+    const cartItem = state.cart.find(i => Number(i.productId) === Number(productId));
     if (!cartItem) return;
 
-    if (raw === '' || isNaN(val) || val <= 0) {
+    if (raw === '') {
         inputEl.value = cartItem.qty;
         return;
     }
 
-    const finalQty = Math.max(1, Math.floor(val));
+    const val = parseInt(raw, 10);
+    if (isNaN(val) || val <= 0) {
+        inputEl.value = cartItem.qty;
+        return;
+    }
+
+    const finalQty = Math.max(1, val);
     inputEl.value = finalQty;
     window.posUpdateQty(productId, finalQty, false);
 };
