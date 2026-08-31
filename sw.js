@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hussam-erp-v2.8-live-sync';
+const CACHE_NAME = 'hussam-erp-v2.9-live-sync';
 const urlsToCache = [
   './',
   './index.html',

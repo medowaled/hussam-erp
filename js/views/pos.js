@@ -874,10 +874,12 @@ window.posUpdateQtyInline = (productId, inputEl) => {
     if (isNaN(val) || val <= 0) return;
 
     const finalQty = Math.max(1, val);
-    const cartItem = state.cart.find(i => Number(i.productId) === Number(productId));
+    const cartItem = state.cart.find(i => String(i.productId) === String(productId));
     if (cartItem) {
         cartItem.qty = finalQty;
-        state.save('hussam_erp_cart_v2.5', state.cart);
+        try {
+            localStorage.setItem('hussam_erp_cart_v2.5', JSON.stringify(state.cart));
+        } catch (e) {}
     }
 
     const itemTotalEl = document.getElementById(`cart-item-total-${productId}`);
@@ -909,7 +911,7 @@ window.posCommitQtyInput = (productId, inputEl) => {
     raw = raw.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
     raw = raw.replace(/[^0-9]/g, '');
 
-    const cartItem = state.cart.find(i => Number(i.productId) === Number(productId));
+    const cartItem = state.cart.find(i => String(i.productId) === String(productId));
     if (!cartItem) return;
 
     if (raw === '') {
@@ -929,7 +931,7 @@ window.posCommitQtyInput = (productId, inputEl) => {
 };
 
 window.posUpdateQty = (productId, qtyOrDelta, isDelta = false) => {
-    const cartItem = state.cart.find(i => Number(i.productId) === Number(productId));
+    const cartItem = state.cart.find(i => String(i.productId) === String(productId));
     const targetQty = isDelta
         ? Math.max(0, (cartItem ? cartItem.qty : 0) + qtyOrDelta)
         : Math.max(0, Number(qtyOrDelta) || 0);

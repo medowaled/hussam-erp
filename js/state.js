@@ -136,9 +136,9 @@ class ERPState {
         } catch (e) {
             console.error('LocalStorage save error:', e);
         }
-        // Cloud sync: business data only. The logged-in session (CURRENT_USER)
-        // stays on this device so opening the site never auto-logs-in.
-        if (key !== STORAGE_KEYS.CURRENT_USER) {
+        // Cloud sync: business data only (products, customers, invoices, etc.)
+        // Session and temporary local cart stay on local device
+        if (key !== STORAGE_KEYS.CURRENT_USER && key !== STORAGE_KEYS.CART) {
             pushToFirestore(key, data, now);
         }
     }
@@ -379,7 +379,7 @@ class ERPState {
 
         // 2. Real-Time Live Sync: Instantaneous Cross-Device Updates (<1 second)
         subscribeToFirestore((key, remoteValue, remoteUpdatedAt) => {
-            if (key === STORAGE_KEYS.CURRENT_USER || remoteValue === null || remoteValue === undefined) return;
+            if (key === STORAGE_KEYS.CURRENT_USER || key === STORAGE_KEYS.CART || remoteValue === null || remoteValue === undefined) return;
             try {
                 localStorage.setItem(key, JSON.stringify(remoteValue));
                 localStorage.setItem(key + '_updatedAt', String(remoteUpdatedAt || Date.now()));
@@ -388,6 +388,12 @@ class ERPState {
 
             this.notify();
             if (typeof window !== 'undefined' && this.isAuthenticated()) {
+                const activeEl = document.activeElement;
+                const isTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT');
+                if (isTyping && typeof currentViewName !== 'undefined' && currentViewName === 'pos') {
+                    if (window.updateHeaderAndSidebarStats) window.updateHeaderAndSidebarStats();
+                    return;
+                }
                 if (window.renderCurrentView) window.renderCurrentView();
                 if (window.updateHeaderAndSidebarStats) window.updateHeaderAndSidebarStats();
             }
