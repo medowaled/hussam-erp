@@ -661,10 +661,10 @@ class ERPState {
 
     /* Cart Operations */
     addToCart(productId, qtyPacks = 1) {
-        const product = this.products.find(p => p.id === productId);
+        const product = this.products.find(p => String(p.id) === String(productId));
         if (!product) return;
 
-        const existing = this.cart.find(item => item.productId === productId);
+        const existing = this.cart.find(item => String(item.productId) === String(productId));
         if (existing) {
             existing.qty += qtyPacks;
         } else {
@@ -684,7 +684,7 @@ class ERPState {
             this.removeFromCart(productId);
             return;
         }
-        const item = this.cart.find(i => i.productId === productId);
+        const item = this.cart.find(i => String(i.productId) === String(productId));
         if (item) {
             item.qty = qty;
             this.save(STORAGE_KEYS.CART, this.cart);
@@ -692,7 +692,7 @@ class ERPState {
     }
 
     removeFromCart(productId) {
-        this.cart = this.cart.filter(i => i.productId !== productId);
+        this.cart = this.cart.filter(i => String(i.productId) !== String(productId));
         this.save(STORAGE_KEYS.CART, this.cart);
     }
 
